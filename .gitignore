@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+
+# Deployment outputs (commit these)
+# deployments/ — intentionally NOT ignored
+
+# Misc
+.DS_Store
+*.log
+.vercel

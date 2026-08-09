@@ -1,0 +1,16 @@
+{
+  "name": "eternity-id",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ZK-Degree & Course Verifier — IITG Ethereum Privacy Hackathon",
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "test": "pnpm --filter contracts test",
+    "deploy:sepolia": "pnpm --filter contracts deploy:sepolia"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
