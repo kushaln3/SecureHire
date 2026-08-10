@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Transpile workspace packages so Next.js/Turbopack can bundle them from source
-  transpilePackages: ["@eternity-id/identity-vault"],
+  transpilePackages: ["@eternity-id/identity-vault", "@kohaku-eth/provider"],
 
   // Turbopack config (Next.js 16 default bundler)
   turbopack: {
