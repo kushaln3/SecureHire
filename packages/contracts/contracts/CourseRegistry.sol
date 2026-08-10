@@ -9,6 +9,7 @@ struct Course {
     uint256 groupId;
     address university;
     bool active;
+    bool isDegree;
 }
 
 contract CourseRegistry is Ownable {
@@ -16,6 +17,7 @@ contract CourseRegistry is Ownable {
     mapping(string => uint256) public courseCodeToGroupId;
     mapping(string => bool) public courseCodeExists;
     mapping(uint256 => bool) public groupExists;
+    mapping(uint256 => uint256[]) private _degreeCourses;
 
     uint256[] public allGroupIds;
     uint256 public courseCount;
@@ -33,23 +35,38 @@ contract CourseRegistry is Ownable {
         issuer = _issuer;
     }
 
-    function addCourse(string memory name, string memory code, uint256 groupId, address university) external onlyIssuer {
-        require(!groupExists[groupId], "Course already exists for this group");
+    function addCourse(
+        string memory name,
+        string memory code,
+        uint256 groupId,
+        address university,
+        bool isDegree
+    ) external onlyIssuer {
+        require(!groupExists[groupId], "Group already exists");
         require(!courseCodeExists[code], "Course code already exists");
-
         courses[groupId] = Course({
             name: name,
             code: code,
             groupId: groupId,
             university: university,
-            active: true
+            active: true,
+            isDegree: isDegree
         });
-
         groupExists[groupId] = true;
         courseCodeExists[code] = true;
         courseCodeToGroupId[code] = groupId;
         allGroupIds.push(groupId);
         courseCount++;
+    }
+
+    function linkCourseToDegree(uint256 degreeGroupId, uint256 courseGroupId) external onlyIssuer {
+        require(groupExists[degreeGroupId] && courses[degreeGroupId].isDegree, "Not a valid degree group");
+        require(groupExists[courseGroupId] && !courses[courseGroupId].isDegree, "Not a valid course group");
+        _degreeCourses[degreeGroupId].push(courseGroupId);
+    }
+
+    function getDegreeCourses(uint256 degreeGroupId) external view returns (uint256[] memory) {
+        return _degreeCourses[degreeGroupId];
     }
 
     function getCourse(uint256 groupId) external view returns (Course memory) {
@@ -62,6 +79,10 @@ contract CourseRegistry is Ownable {
 
     function isValidCourse(uint256 groupId) external view returns (bool) {
         return groupExists[groupId] && courses[groupId].active;
+    }
+
+    function isValidDegree(uint256 groupId) external view returns (bool) {
+        return groupExists[groupId] && courses[groupId].active && courses[groupId].isDegree;
     }
 
     function deactivateCourse(uint256 groupId) external onlyIssuer {

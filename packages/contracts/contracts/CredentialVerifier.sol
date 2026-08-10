@@ -29,9 +29,41 @@ contract CredentialVerifier {
         semaphore.validateProof(groupId, proof);
 
         usedNullifiers[proof.nullifier] = true;
-        
         emit CredentialVerified(groupId, proof.nullifier, proof.message, true);
         return true;
+    }
+
+    /// @notice Verify a batch of proofs. Returns an array of booleans — does NOT revert on partial failure.
+    function verifyBatch(
+        ISemaphore.SemaphoreProof[] calldata proofs,
+        uint256[] calldata groupIds
+    ) external returns (bool[] memory results) {
+        require(proofs.length == groupIds.length, "Length mismatch");
+        require(proofs.length > 0, "Empty batch");
+
+        results = new bool[](proofs.length);
+
+        for (uint256 i = 0; i < proofs.length; i++) {
+            // Skip invalid course
+            if (!courseRegistry.isValidCourse(groupIds[i])) {
+                results[i] = false;
+                continue;
+            }
+            // Skip already-used nullifier
+            if (usedNullifiers[proofs[i].nullifier]) {
+                results[i] = false;
+                continue;
+            }
+            // Try proof validation — catch any revert from Semaphore
+            try semaphore.validateProof(groupIds[i], proofs[i]) {
+                usedNullifiers[proofs[i].nullifier] = true;
+                emit CredentialVerified(groupIds[i], proofs[i].nullifier, proofs[i].message, true);
+                results[i] = true;
+            } catch {
+                results[i] = false;
+            }
+        }
+        return results;
     }
 
     function isNullifierUsed(uint256 nullifier) external view returns (bool) {

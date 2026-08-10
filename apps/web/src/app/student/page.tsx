@@ -20,6 +20,7 @@ interface Credential {
   courseName: string;
   courseCode: string;
   universityAddress: string;
+  isDegree: boolean;
 }
 
 export default function StudentPortal() {
@@ -36,13 +37,15 @@ export default function StudentPortal() {
   const [jobId, setJobId] = useState('');
   const [isGeneratingProof, setIsGeneratingProof] = useState(false);
   const [proofResult, setProofResult] = useState<any>(null);
+  
+  const [proofMode, setProofMode] = useState<'full' | 'custom'>('full');
+  const [selectedCustomGroups, setSelectedCustomGroups] = useState<number[]>([]);
 
   const { universities } = useUniversities();
 
-  // Courses for the selected university
   const selectedUniCourses = universities.find(u => u.address === selectedUniAddr)?.courses ?? [];
+  const selectedUniDegrees = selectedUniCourses.filter(c => c.isDegree);
 
-  // Load from local storage on mount
   useEffect(() => {
     const savedSeed = localStorage.getItem('eternity_student_seed');
     const savedPq = localStorage.getItem('eternity_student_pq');
@@ -89,7 +92,6 @@ export default function StudentPortal() {
       const issuerContract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
       const registryContract = new ethers.Contract(CONTRACTS.courseRegistry, COURSE_REGISTRY_ABI, provider);
       
-      // Filter CredentialIssued events for this specific commitment
       const commitment = getCommitment(id);
       const filter = issuerContract.filters.CredentialIssued(null, commitment);
       const events = await issuerContract.queryFilter(filter, -49000);
@@ -103,7 +105,8 @@ export default function StudentPortal() {
             groupId,
             courseName: courseData[0],
             courseCode: courseData[1],
-            universityAddress: courseData[3]
+            universityAddress: courseData[3],
+            isDegree: Boolean(courseData[5])
           });
         }
       }
@@ -116,26 +119,57 @@ export default function StudentPortal() {
   };
 
   const handleGenerateProof = async () => {
-    if (!identity || !selectedGroup || !jobId) return alert("Missing fields");
+    if (!identity || !jobId) return alert("Missing job ID");
+    
     setIsGeneratingProof(true);
     try {
-      // 1. Fetch all members of this group to build the local Merkle Tree
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const issuerContract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
       
-      const filter = issuerContract.filters.CredentialIssued(selectedGroup, null);
-      const events = await issuerContract.queryFilter(filter, -49000);
-      
-      const members: bigint[] = events
-        .filter(e => 'args' in e)
-        .map(e => (e as any).args[1]);
+      if (proofMode === 'full') {
+        if (!selectedGroup) throw new Error("Select a degree");
         
-      if (members.length === 0) throw new Error("No members found in group");
+        const filter = issuerContract.filters.CredentialIssued(selectedGroup, null);
+        const events = await issuerContract.queryFilter(filter, -49000);
+        
+        const members: bigint[] = events
+          .filter(e => 'args' in e)
+          .map(e => (e as any).args[1]);
+          
+        if (members.length === 0) throw new Error("No members found in group");
 
-      // 2. Generate Proof via the SDK
-      const proof = await generateCredentialProof(identity, selectedGroup, members, jobId);
-      setProofResult(proof);
-      
+        const proof = await generateCredentialProof(identity, selectedGroup, members, jobId);
+        setProofResult(proof);
+      } else {
+        if (selectedCustomGroups.length === 0) throw new Error("Select at least one credential");
+        
+        const proofs = [];
+        for (const gid of selectedCustomGroups) {
+          const filter = issuerContract.filters.CredentialIssued(gid, null);
+          const events = await issuerContract.queryFilter(filter, -49000);
+          
+          const members: bigint[] = events
+            .filter(e => 'args' in e)
+            .map(e => (e as any).args[1]);
+            
+          if (members.length === 0) continue;
+          
+          const p = await generateCredentialProof(identity, gid, members, jobId);
+          // Decorate with course info for verifier UI
+          const cred = credentials.find(c => c.groupId === gid);
+          proofs.push({ ...p, groupId: gid, courseName: cred?.courseName || `Course ${gid}` });
+        }
+        
+        if (proofs.length === 0) throw new Error("Could not generate proofs for selection");
+        
+        const bundle = {
+          version: 'bundle-v1',
+          jobId,
+          proofs
+        };
+        
+        setProofResult(bundle);
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Proof generation failed");
@@ -151,6 +185,12 @@ export default function StudentPortal() {
     setPqKey('');
     setCredentials([]);
     setProofResult(null);
+  };
+
+  const toggleCustomGroup = (gid: number) => {
+    setSelectedCustomGroups(prev => 
+      prev.includes(gid) ? prev.filter(g => g !== gid) : [...prev, gid]
+    );
   };
 
   return (
@@ -235,11 +275,21 @@ export default function StudentPortal() {
               {credentials.map(c => (
                 <div key={c.groupId} className="p-4 bg-slate-950 border border-slate-800 flex justify-between items-center">
                   <div>
-                    <h3 className="font-bold text-slate-200">{c.courseCode}: {c.courseName}</h3>
+                    <h3 className="font-bold text-slate-200">
+                      {c.isDegree && <span className="mr-2">🎓</span>}
+                      {c.courseCode}: {c.courseName}
+                    </h3>
                     <p className="text-xs text-slate-500 mt-1 font-mono">Issued by: {c.universityAddress}</p>
                   </div>
-                  <div className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-semibold">
-                    Group ID: {c.groupId}
+                  <div className="flex items-center gap-4">
+                    {c.isDegree && (
+                      <span className="px-2 py-0.5 bg-emerald-900/50 text-emerald-400 border border-emerald-800 text-[10px] font-bold tracking-wider rounded-full">
+                        DEGREE
+                      </span>
+                    )}
+                    <div className="px-3 py-1 bg-slate-800 text-slate-300 text-xs font-semibold">
+                      Group ID: {c.groupId}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -249,47 +299,101 @@ export default function StudentPortal() {
       )}
 
       {/* Proof Generation */}
-      {identity && universities.length > 0 && (
+      {identity && universities.length > 0 && credentials.length > 0 && (
         <section className="p-8 border border-slate-800 bg-slate-900/50">
-          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">3. Generate Zero-Knowledge Proof</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-serif font-bold text-slate-200">3. Generate Zero-Knowledge Proof</h2>
+            
+            <div className="flex bg-slate-950 p-1 border border-slate-800 rounded">
+              <button 
+                type="button"
+                className={`px-3 py-1 text-xs font-semibold ${proofMode === 'full' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+                onClick={() => setProofMode('full')}
+              >
+                Full Degree
+              </button>
+              <button 
+                type="button"
+                className={`px-3 py-1 text-xs font-semibold ${proofMode === 'custom' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+                onClick={() => setProofMode('custom')}
+              >
+                Custom Selection
+              </button>
+            </div>
+          </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
-            {/* Step 1: Pick university */}
-            <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">1. Select University</label>
-              <select
-                style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: '#f1f5f9', outline: 'none' }}
-                value={selectedUniAddr}
-                onChange={e => { setSelectedUniAddr(e.target.value); setSelectedGroup(null); }}
-              >
-                <option value="" disabled>-- Select Institution --</option>
-                {universities.map(u => (
-                  <option key={u.address} value={u.address}>{u.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Step 2: Pick course from that university */}
-            <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">2. Select Course</label>
-              <select
-                style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: selectedUniAddr ? '#f1f5f9' : '#334155', outline: 'none' }}
-                value={selectedGroup ?? ''}
-                onChange={e => setSelectedGroup(Number(e.target.value))}
-                disabled={!selectedUniAddr || selectedUniCourses.length === 0}
-              >
-                <option value="" disabled>
-                  {!selectedUniAddr ? '← Pick university first' : selectedUniCourses.length === 0 ? 'No courses yet' : '-- Select Course --'}
-                </option>
-                {selectedUniCourses.map(c => (
-                  <option key={c.groupId} value={c.groupId}>{c.code}: {c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Step 3: Job ID */}
-            <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">3. Job / Application ID (Scope)</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginBottom: '2rem' }}>
+            {proofMode === 'full' ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-serif text-slate-400 mb-2">1. Select University</label>
+                  <select
+                    style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: '#f1f5f9', outline: 'none' }}
+                    value={selectedUniAddr}
+                    onChange={e => { setSelectedUniAddr(e.target.value); setSelectedGroup(null); }}
+                  >
+                    <option value="" disabled>-- Select Institution --</option>
+                    {universities.map(u => (
+                      <option key={u.address} value={u.address}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-serif text-slate-400 mb-2">2. Select Degree</label>
+                  <select
+                    style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: selectedUniAddr ? '#f1f5f9' : '#334155', outline: 'none' }}
+                    value={selectedGroup ?? ''}
+                    onChange={e => setSelectedGroup(Number(e.target.value))}
+                    disabled={!selectedUniAddr || selectedUniDegrees.length === 0}
+                  >
+                    <option value="" disabled>
+                      {!selectedUniAddr ? '← Pick university first' : selectedUniDegrees.length === 0 ? 'No degrees found' : '-- Select Degree --'}
+                    </option>
+                    {selectedUniDegrees.map(c => (
+                      <option key={c.groupId} value={c.groupId}>🎓 {c.code}: {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-serif text-slate-400">1. Select Credentials for Bundle</label>
+                  <button 
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                    onClick={() => {
+                      if (selectedCustomGroups.length === credentials.length) {
+                        setSelectedCustomGroups([]);
+                      } else {
+                        setSelectedCustomGroups(credentials.map(c => c.groupId));
+                      }
+                    }}
+                  >
+                    {selectedCustomGroups.length === credentials.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 bg-slate-950 p-4 border border-slate-800">
+                  {credentials.map(c => (
+                    <label key={c.groupId} className="flex items-center gap-3 p-2 hover:bg-slate-900 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={selectedCustomGroups.includes(c.groupId)}
+                        onChange={() => toggleCustomGroup(c.groupId)}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
+                      />
+                      <span className="text-slate-200 text-sm">
+                        {c.isDegree ? '🎓 ' : ''}{c.courseCode}: {c.courseName}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-4">
+              <label className="block text-sm font-serif text-slate-400 mb-2">
+                {proofMode === 'full' ? '3.' : '2.'} Job / Application ID (Scope)
+              </label>
               <input
                 type="text"
                 value={jobId}
@@ -305,9 +409,9 @@ export default function StudentPortal() {
             className="w-full mb-8"
             onClick={handleGenerateProof}
             isLoading={isGeneratingProof}
-            disabled={!selectedGroup || !jobId}
+            disabled={(proofMode === 'full' && !selectedGroup) || (proofMode === 'custom' && selectedCustomGroups.length === 0) || !jobId}
           >
-            {isGeneratingProof ? "Constructing Merkle Tree & Generating Proof..." : "Generate Cryptographic Proof"}
+            {isGeneratingProof ? "Constructing Merkle Tree & Generating Proof(s)..." : `Generate Cryptographic Proof ${proofMode === 'custom' ? 'Bundle' : ''}`}
           </Button>
           
           {proofResult && (

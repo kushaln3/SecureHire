@@ -104,7 +104,7 @@ describe("SecureHire Smart Contracts Full Audit", function () {
         .to.be.revertedWith("Zero issuer address");
     });
     it("only issuer can addCourse", async function () {
-      await expect(courseRegistry.connect(attacker).addCourse("Test", "TST", 1, attacker.address))
+      await expect(courseRegistry.connect(attacker).addCourse("Test", "TST", 1, attacker.address, false))
         .to.be.revertedWith("Not the issuer");
     });
   });
@@ -215,7 +215,7 @@ describe("SecureHire Smart Contracts Full Audit", function () {
     });
     it("university cannot issue to invalid groupId (99999)", async function () {
       await expect(credentialIssuer.connect(university).issueCredential(99999, student1.commitment))
-        .to.be.revertedWith("Invalid course group");
+        .to.be.revertedWith("Invalid course or degree group");
     });
     it("university issues successfully, credentialCount increments", async function () {
       expect(await credentialIssuer.credentialCount(groupId)).to.equal(0n);
@@ -310,6 +310,130 @@ describe("SecureHire Smart Contracts Full Audit", function () {
       await expect(credentialVerifier.verifyCredential(semaphoreProof, groupId))
         .to.emit(credentialVerifier, "CredentialVerified")
         .withArgs(groupId, fullProof.nullifier, fullProof.message, true);
+    });
+  });
+
+  describe('7. Degree Creation & Linking', function() {
+    let degreeGroupId: bigint;
+
+    it('DEG-01: Approved university can create degree group', async function() {
+      const tx = await credentialIssuer.connect(university).createDegree("Bachelor of Tech", "BTECH");
+      const receipt = await tx.wait();
+      
+      const event = receipt?.logs.find(
+        (log) => log.topics[0] === credentialIssuer.interface.getEvent("DegreeCreated").topicHash
+      );
+      expect(event).to.not.be.undefined;
+      const decoded = credentialIssuer.interface.decodeEventLog("DegreeCreated", event!.data, event!.topics);
+      degreeGroupId = decoded.groupId;
+    });
+
+    it('DEG-02: DegreeCreated event emitted with correct args', async function() {
+      const tx = await credentialIssuer.connect(university).createDegree("Master of Tech", "MTECH");
+      const receipt = await tx.wait();
+      const event = receipt?.logs.find(
+        (log) => log.topics[0] === credentialIssuer.interface.getEvent("DegreeCreated").topicHash
+      );
+      const decoded = credentialIssuer.interface.decodeEventLog("DegreeCreated", event!.data, event!.topics);
+      expect(decoded.name).to.equal("Master of Tech");
+      expect(decoded.code).to.equal("MTECH");
+    });
+
+    it('DEG-03: isDegree=true in CourseRegistry for degree groups', async function() {
+      expect(await courseRegistry.isValidDegree(degreeGroupId)).to.be.true;
+    });
+
+    it('DEG-04: isValidDegree returns true for degree group', async function() {
+      expect(await courseRegistry.isValidDegree(degreeGroupId)).to.be.true;
+    });
+
+    it('DEG-05: linkCourseToDegree links course to degree', async function() {
+      await credentialIssuer.connect(university).linkCourseToDegree(groupId, degreeGroupId);
+    });
+
+    it('DEG-06: getDegreeCourses returns linked course groupIds', async function() {
+      const courses = await courseRegistry.getDegreeCourses(degreeGroupId);
+      expect(courses.length).to.equal(1);
+      expect(courses[0]).to.equal(groupId);
+    });
+
+    it('DEG-07: linkCourseToDegree reverts when target is not a degree', async function() {
+      await expect(credentialIssuer.connect(university).linkCourseToDegree(groupId, groupId))
+        .to.be.reverted;
+    });
+
+    it('DEG-08: University can issue credential to a degree group', async function() {
+      await expect(credentialIssuer.connect(university).issueCredential(degreeGroupId, student1.commitment))
+        .to.emit(credentialIssuer, "CredentialIssued");
+    });
+  });
+
+  describe('8. verifyBatch', function() {
+    it('BAT-01: verifyBatch reverts on length mismatch', async function() {
+      await expect(credentialVerifier.verifyBatch([], [1])).to.be.revertedWith("Length mismatch");
+    });
+
+    it('BAT-02: verifyBatch returns false for invalid course groupId', async function() {
+      const scope = groupId;
+      const message = 777;
+      const group = new Group([student1.commitment.toString()]);
+      const fullProof = await generateProof(student1, group, scope.toString(), message.toString());
+      const semaphoreProof = {
+        merkleTreeDepth: fullProof.merkleTreeDepth,
+        merkleTreeRoot: fullProof.merkleTreeRoot,
+        nullifier: fullProof.nullifier,
+        message: fullProof.message,
+        scope: fullProof.scope,
+        points: fullProof.points
+      };
+
+      const results = await credentialVerifier.verifyBatch.staticCall([semaphoreProof], [99999]);
+      expect(results[0]).to.be.false;
+    });
+
+    it('BAT-03: verifyBatch verifies multiple proofs, returns bool[]', async function() {
+      const group1 = new Group([student1.commitment.toString(), student2.commitment.toString()]);
+      const proof1 = await generateProof(student1, group1, groupId.toString(), "888");
+      const p1 = {
+        merkleTreeDepth: proof1.merkleTreeDepth,
+        merkleTreeRoot: proof1.merkleTreeRoot,
+        nullifier: proof1.nullifier,
+        message: proof1.message,
+        scope: proof1.scope,
+        points: proof1.points
+      };
+
+      const group2 = new Group([student1.commitment.toString(), student2.commitment.toString()]);
+      const proof2 = await generateProof(student2, group2, groupId.toString(), "999");
+      const p2 = {
+        merkleTreeDepth: proof2.merkleTreeDepth,
+        merkleTreeRoot: proof2.merkleTreeRoot,
+        nullifier: proof2.nullifier,
+        message: proof2.message,
+        scope: proof2.scope,
+        points: proof2.points
+      };
+
+      const results = await credentialVerifier.verifyBatch.staticCall([p1, p2], [groupId, groupId]);
+      expect(results[0]).to.be.true;
+      expect(results[1]).to.be.true;
+    });
+
+    it('BAT-04: verifyBatch returns false for already-used nullifier in batch', async function() {
+      const group = new Group([student1.commitment.toString()]);
+      const proof = await generateProof(student1, group, groupId.toString(), "1000");
+      const p = {
+        merkleTreeDepth: proof.merkleTreeDepth,
+        merkleTreeRoot: proof.merkleTreeRoot,
+        nullifier: proof.nullifier,
+        message: proof.message,
+        scope: proof.scope,
+        points: proof.points
+      };
+
+      const results = await credentialVerifier.verifyBatch.staticCall([p, p], [groupId, groupId]);
+      expect(results[0]).to.be.true;
+      expect(results[1]).to.be.false;
     });
   });
 });

@@ -4,13 +4,13 @@ import { ethers } from 'ethers';
 import { CONTRACTS, CREDENTIAL_ISSUER_ABI, COURSE_REGISTRY_ABI } from '@/lib/contracts';
 import { Button } from '@/components/ui/button';
 import { generateCredentialProof } from '@eternity-id/identity-vault'; 
-// Note: We use identity-vault indirectly via the smart contracts here, proof generation is for the student.
 
 interface Course {
   groupId: number;
   name: string;
   code: string;
   active: boolean;
+  isDegree?: boolean;
 }
 
 export default function UniversityDashboard() {
@@ -18,11 +18,16 @@ export default function UniversityDashboard() {
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createMode, setCreateMode] = useState<'course' | 'degree'>('course');
   
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [studentCommitment, setStudentCommitment] = useState("");
   const [issuing, setIssuing] = useState(false);
   
+  const [linkDegreeGroupId, setLinkDegreeGroupId] = useState<number | null>(null);
+  const [linkCourseGroupId, setLinkCourseGroupId] = useState<number | null>(null);
+  const [linking, setLinking] = useState(false);
+
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [universityName, setUniversityName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -78,24 +83,22 @@ export default function UniversityDashboard() {
   const fetchCourses = async (provider: ethers.BrowserProvider, universityAddress: string) => {
     try {
       const registry = new ethers.Contract(CONTRACTS.courseRegistry, COURSE_REGISTRY_ABI, provider);
-      // In a real app, we'd index this properly. For hackathon, we fetch all and filter.
       const groupIds = await registry.getAllGroupIds();
       
       const fetchedCourses: Course[] = [];
       for (const id of groupIds) {
         const c = await registry.getCourse(id);
-        // c = [name, code, groupId, universityAddress, active]
         if (c[3].toLowerCase() === universityAddress.toLowerCase()) {
           fetchedCourses.push({
             name: c[0],
             code: c[1],
             groupId: Number(c[2]),
-            active: c[4]
+            active: c[4],
+            isDegree: Boolean(c[5])
           });
         }
       }
       setCourses(fetchedCourses);
-      // fetch student counts in parallel after courses are set
       await fetchCourseStudentCounts(provider, fetchedCourses);
     } catch (err) {
       console.error(err);
@@ -112,15 +115,20 @@ export default function UniversityDashboard() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
       
-      const tx = await contract.createCourse(courseName, courseCode);
-      await tx.wait();
+      if (createMode === 'degree') {
+        const tx = await contract.createDegree(courseName, courseCode);
+        await tx.wait();
+      } else {
+        const tx = await contract.createCourse(courseName, courseCode);
+        await tx.wait();
+      }
       
       setCourseName("");
       setCourseCode("");
-      alert("Course successfully created on-chain!");
+      alert(`${createMode === 'degree' ? 'Degree' : 'Course'} successfully created on-chain!`);
       await fetchCourses(provider, signer.address);
     } catch (err: any) {
-      alert(err.reason || err.message || "Failed to create course");
+      alert(err.reason || err.message || "Failed to create");
     } finally {
       setCreating(false);
     }
@@ -142,10 +150,35 @@ export default function UniversityDashboard() {
       
       setStudentCommitment("");
       alert("Credential successfully issued to student!");
+      await fetchCourses(provider, signer.address);
     } catch (err: any) {
       alert(err.reason || err.message || "Failed to issue credential");
     } finally {
       setIssuing(false);
+    }
+  };
+
+  const handleLinkCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkCourseGroupId || !linkDegreeGroupId) return alert("Select both course and degree to link");
+    if (!window.ethereum) return;
+    setLinking(true);
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
+      
+      const tx = await contract.linkCourseToDegree(linkCourseGroupId, linkDegreeGroupId);
+      await tx.wait();
+      
+      alert("Successfully linked course to degree!");
+      setLinkCourseGroupId(null);
+      setLinkDegreeGroupId(null);
+    } catch (err: any) {
+      alert(err.reason || err.message || "Failed to link");
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -175,6 +208,9 @@ export default function UniversityDashboard() {
     );
   }
 
+  const degrees = courses.filter(c => c.isDegree);
+  const regularCourses = courses.filter(c => !c.isDegree);
+
   return (
     <div className="max-w-6xl mx-auto py-12 animate-in fade-in duration-1000">
       <header className="mb-12">
@@ -185,32 +221,89 @@ export default function UniversityDashboard() {
       </header>
 
       <div className="grid md:grid-cols-2 gap-8 mb-12">
-        {/* Create Course Panel */}
-        <div className="p-8 border border-slate-800 bg-slate-900/50">
-          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Create New Course</h2>
+        {/* Create Course/Degree Panel */}
+        <div className="p-8 border border-slate-800 bg-slate-900/50 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-serif font-bold text-slate-200">Create New {createMode === 'degree' ? 'Degree' : 'Course'}</h2>
+            <div className="flex bg-slate-950 p-1 border border-slate-800 rounded">
+              <button 
+                type="button"
+                className={`px-3 py-1 text-xs font-semibold ${createMode === 'course' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+                onClick={() => setCreateMode('course')}
+              >
+                Course
+              </button>
+              <button 
+                type="button"
+                className={`px-3 py-1 text-xs font-semibold ${createMode === 'degree' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}
+                onClick={() => setCreateMode('degree')}
+              >
+                Degree
+              </button>
+            </div>
+          </div>
           <form onSubmit={handleCreateCourse} className="space-y-6">
             <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">Course Name</label>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Name</label>
               <input 
                 type="text" required
                 value={courseName} onChange={e => setCourseName(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
-                placeholder="e.g. Data Structures"
+                placeholder={createMode === 'degree' ? "e.g. Master of Computer Science" : "e.g. Data Structures"}
               />
             </div>
             <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">Course Code</label>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Code</label>
               <input 
                 type="text" required
                 value={courseCode} onChange={e => setCourseCode(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
-                placeholder="e.g. CS201"
+                placeholder={createMode === 'degree' ? "e.g. MCS" : "e.g. CS201"}
               />
             </div>
             <Button type="submit" className="w-full" isLoading={creating}>
-              Create Course Group
+              Create {createMode === 'degree' ? 'Degree' : 'Course'} Group
             </Button>
           </form>
+
+          {createMode === 'degree' && (
+            <div className="mt-8 pt-6 border-t border-slate-800">
+              <h3 className="text-xl font-serif font-bold text-slate-200 mb-4">Link Courses to this Degree</h3>
+              <form onSubmit={handleLinkCourse} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-serif text-slate-400 mb-1">Select Degree</label>
+                  <select
+                    required
+                    value={linkDegreeGroupId || ""}
+                    onChange={e => setLinkDegreeGroupId(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 px-3 py-2 text-slate-100 text-sm focus:outline-none"
+                  >
+                    <option value="" disabled>-- Select Degree --</option>
+                    {degrees.map(c => (
+                      <option key={c.groupId} value={c.groupId}>{c.code}: {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-serif text-slate-400 mb-1">Select Course to Link</label>
+                  <select
+                    required
+                    value={linkCourseGroupId || ""}
+                    onChange={e => setLinkCourseGroupId(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 px-3 py-2 text-slate-100 text-sm focus:outline-none"
+                  >
+                    <option value="" disabled>-- Select Course --</option>
+                    {regularCourses.map(c => (
+                      <option key={c.groupId} value={c.groupId}>{c.code}: {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button type="submit" variant="outline" className="w-full" isLoading={linking}>
+                  Link Course
+                </Button>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* Issue Credential Panel */}
@@ -218,17 +311,17 @@ export default function UniversityDashboard() {
           <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Issue Credential</h2>
           <form onSubmit={handleIssueCredential} className="space-y-6">
             <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">Select Course</label>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Select Course / Degree</label>
               <select
                 required
                 value={selectedGroup || ""}
                 onChange={e => setSelectedGroup(Number(e.target.value))}
                 className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
               >
-                <option value="" disabled>-- Select a Course --</option>
+                <option value="" disabled>-- Select --</option>
                 {courses.map(c => (
                   <option key={c.groupId} value={c.groupId}>
-                    {c.code}: {c.name}
+                    {c.isDegree ? '🎓 ' : ''}{c.code}: {c.name}
                   </option>
                 ))}
               </select>
@@ -251,8 +344,8 @@ export default function UniversityDashboard() {
 
       {/* ── Active Courses List ─────────────────────────────── */}
       <section className="border-t border-slate-800 pt-10">
-        <h2 className="text-2xl font-serif font-bold text-slate-200 mb-2">Active Courses</h2>
-        <p className="text-slate-500 text-sm font-serif italic mb-6">All courses registered on-chain for your institution.</p>
+        <h2 className="text-2xl font-serif font-bold text-slate-200 mb-2">Active Courses & Degrees</h2>
+        <p className="text-slate-500 text-sm font-serif italic mb-6">All offerings registered on-chain for your institution.</p>
 
         {courses.length === 0 ? (
           <div className="p-10 border border-slate-800 bg-slate-900/30 text-center">
@@ -267,10 +360,17 @@ export default function UniversityDashboard() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-400 font-mono text-xs shrink-0">
-                    {c.code.slice(0, 3)}
+                    {c.isDegree ? '🎓' : c.code.slice(0, 3)}
                   </div>
                   <div>
-                    <p className="font-serif font-semibold text-slate-200">{c.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-serif font-semibold text-slate-200">{c.name}</p>
+                      {c.isDegree && (
+                        <span className="px-2 py-0.5 bg-emerald-900/50 text-emerald-400 border border-emerald-800 text-[10px] font-bold tracking-wider rounded-full">
+                          DEGREE
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs font-mono text-slate-500 mt-0.5">{c.code} · Group #{c.groupId}</p>
                   </div>
                 </div>

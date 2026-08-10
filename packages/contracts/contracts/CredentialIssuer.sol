@@ -5,8 +5,9 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@semaphore-protocol/contracts/interfaces/ISemaphore.sol";
 
 interface ICourseRegistry {
-    function addCourse(string calldata name, string calldata code, uint256 groupId, address university) external;
+    function addCourse(string calldata name, string calldata code, uint256 groupId, address university, bool isDegree) external;
     function isValidCourse(uint256 groupId) external view returns (bool);
+    function linkCourseToDegree(uint256 degreeGroupId, uint256 courseGroupId) external;
 }
 
 contract CredentialIssuer is AccessControl {
@@ -29,6 +30,7 @@ contract CredentialIssuer is AccessControl {
     event RegistrationRequested(address indexed wallet, string name, string metadata);
     event UniversityApproved(address indexed wallet, string name);
     event CourseCreated(uint256 indexed groupId, string name, string code, address indexed university);
+    event DegreeCreated(uint256 indexed groupId, string name, string code, address indexed university);
     event CredentialIssued(uint256 indexed groupId, uint256 indexed commitment, uint256 timestamp);
     event CredentialRevoked(uint256 indexed groupId, uint256 indexed commitment);
     event UniversityRejected(address indexed wallet);
@@ -75,18 +77,30 @@ contract CredentialIssuer is AccessControl {
         emit UniversityRevoked(wallet);
     }
 
+    /// @notice Create a standard course Semaphore group.
     function createCourse(string calldata name, string calldata code) external onlyRole(UNIVERSITY_ROLE) returns (uint256) {
-        // Create a Semaphore group. In V4, createGroup takes the admin address.
-        // It returns a groupId.
         uint256 groupId = semaphore.createGroup(address(this));
-        
-        courseRegistry.addCourse(name, code, groupId, msg.sender);
+        courseRegistry.addCourse(name, code, groupId, msg.sender, false);
         emit CourseCreated(groupId, name, code, msg.sender);
         return groupId;
     }
 
+    /// @notice Create a degree Semaphore group (isDegree=true in registry).
+    function createDegree(string calldata name, string calldata code) external onlyRole(UNIVERSITY_ROLE) returns (uint256) {
+        uint256 groupId = semaphore.createGroup(address(this));
+        courseRegistry.addCourse(name, code, groupId, msg.sender, true);
+        emit DegreeCreated(groupId, name, code, msg.sender);
+        return groupId;
+    }
+
+    /// @notice Link a course group to a degree group in the registry.
+    function linkCourseToDegree(uint256 courseGroupId, uint256 degreeGroupId) external onlyRole(UNIVERSITY_ROLE) {
+        courseRegistry.linkCourseToDegree(degreeGroupId, courseGroupId);
+    }
+
+    /// @notice Issue a credential (works for both course groups and degree groups).
     function issueCredential(uint256 groupId, uint256 commitment) external onlyRole(UNIVERSITY_ROLE) {
-        require(courseRegistry.isValidCourse(groupId), "Invalid course group");
+        require(courseRegistry.isValidCourse(groupId), "Invalid course or degree group");
         semaphore.addMember(groupId, commitment);
         credentialCount[groupId]++;
         emit CredentialIssued(groupId, commitment, block.timestamp);

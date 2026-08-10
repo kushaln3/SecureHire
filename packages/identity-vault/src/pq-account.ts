@@ -1,10 +1,10 @@
-import { ethers } from 'ethers';
 import type { PQAccount } from './types';
 
 export async function createPQAccount(deterministicSeed?: string): Promise<PQAccount> {
   try {
     // Attempt real Kohaku import
-    const kohaku = await import('@kohaku-eth/pq-account' as string);
+    const getKohaku = new Function("return import('@kohaku-eth/pq-account')");
+    const kohaku = await getKohaku();
     const account = await kohaku.createPQAccount(deterministicSeed); // Pass seed if supported
     return {
       publicKey: account.publicKey || account.address,
@@ -18,14 +18,17 @@ export async function createPQAccount(deterministicSeed?: string): Promise<PQAcc
   }
 }
 
-function createMockPQAccount(deterministicSeed?: string): PQAccount {
+async function createMockPQAccount(deterministicSeed?: string): Promise<PQAccount> {
   // Generate 64 bytes as the mock Dilithium public key
   const keyBytes = new Uint8Array(64);
   if (deterministicSeed) {
-    const hash = ethers.keccak256(ethers.toUtf8Bytes(deterministicSeed));
-    const hex = hash.replace('0x', '');
-    for(let i = 0; i < 64; i++) {
-        keyBytes[i] = parseInt(hex.substring((i % 32) * 2, (i % 32) * 2 + 2), 16);
+    // SubtleCrypto SHA-256 — available in all browsers and Node 18+
+    const encoded = new TextEncoder().encode(deterministicSeed);
+    const hashBuf = await crypto.subtle.digest('SHA-256', encoded);
+    const hashBytes = new Uint8Array(hashBuf);
+    // Repeat 32-byte hash twice to fill 64 bytes
+    for (let i = 0; i < 64; i++) {
+      keyBytes[i] = hashBytes[i % 32];
     }
   } else if (typeof window !== 'undefined' && window.crypto) {
     window.crypto.getRandomValues(keyBytes);

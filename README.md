@@ -117,9 +117,9 @@ After deployment, copy the addresses from `packages/contracts/deployments/sepoli
 | Contract | Address |
 |---|---|
 | Semaphore v4 (pre-deployed) | `0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D` |
-| CourseRegistry | `0x98A9DC53Ba5c29f4A4812C1c171EC7B4A1845C38` |
-| CredentialIssuer | `0x73A9D21e2783d820475f70c147E88cd71Ea4519A` |
-| CredentialVerifier | `0x379053222449A8704f10916821fFCf3122D63aF1` |
+| CourseRegistry | `0x8895d0401384Dffd60E53df362D3f422e2A0bF23` |
+| CredentialIssuer | `0x9499153dDf0bD0c8A6F173d0bD4cF0780183e85D` |
+| CredentialVerifier | `0xAAe96283690450E6a869e2a44aAb4a04Cf453605` |
 
 ---
 
