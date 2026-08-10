@@ -23,12 +23,15 @@ contract CredentialIssuer is AccessControl {
 
     mapping(address => UniversityInfo) public universities;
     mapping(uint256 => uint256) public credentialCount;
+    mapping(uint256 => mapping(uint256 => bool)) public isRevoked;
 
     event RegistrationRequested(address indexed wallet, string name, string metadata);
     event UniversityApproved(address indexed wallet, string name);
     event CourseCreated(uint256 indexed groupId, string name, string code, address indexed university);
     event CredentialIssued(uint256 indexed groupId, uint256 indexed commitment, uint256 timestamp);
     event CredentialRevoked(uint256 indexed groupId, uint256 indexed commitment);
+    event UniversityRejected(address indexed wallet);
+    event UniversityRevoked(address indexed wallet);
 
     constructor(address semaphoreAddress, address courseRegistryAddress) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -49,9 +52,24 @@ contract CredentialIssuer is AccessControl {
 
     function approveUniversity(address wallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(universities[wallet].registeredAt != 0, "University not registered");
+        require(!universities[wallet].approved, "University already approved");
         universities[wallet].approved = true;
         _grantRole(UNIVERSITY_ROLE, wallet);
         emit UniversityApproved(wallet, universities[wallet].name);
+    }
+
+    function rejectUniversity(address wallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(universities[wallet].registeredAt != 0, "University not registered");
+        require(!universities[wallet].approved, "University already approved");
+        universities[wallet].registeredAt = 0;
+        emit UniversityRejected(wallet);
+    }
+
+    function revokeUniversity(address wallet) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(universities[wallet].approved, "University not approved");
+        universities[wallet].approved = false;
+        _revokeRole(UNIVERSITY_ROLE, wallet);
+        emit UniversityRevoked(wallet);
     }
 
     function createCourse(string calldata name, string calldata code) external onlyRole(UNIVERSITY_ROLE) returns (uint256) {
@@ -71,14 +89,12 @@ contract CredentialIssuer is AccessControl {
     }
 
     function revokeCredential(uint256 groupId, uint256 commitment) external onlyRole(UNIVERSITY_ROLE) {
-        // Remove member might need merkle proof parameters in Semaphore, 
-        // but typically it depends on version. Let's see what compile error we get, if any.
-        // V4 removes using the index and merkle siblings. Actually, just removing the identity.
-        // Wait, removeMember in Semaphore v4 needs merkle siblings. 
-        // Wait, does it? Let's assume there is an easy way, or we might need to modify this.
-        // I will just stub it out as `semaphore.removeMember(groupId, commitment);` 
-        // or something that might fail during compilation.
-        revert("Not implemented: Needs Merkle proofs for V4");
+        isRevoked[groupId][commitment] = true;
+        emit CredentialRevoked(groupId, commitment);
+    }
+
+    function isCredentialRevoked(uint256 groupId, uint256 commitment) external view returns (bool) {
+        return isRevoked[groupId][commitment];
     }
 
     function getUniversity(address wallet) external view returns (UniversityInfo memory) {

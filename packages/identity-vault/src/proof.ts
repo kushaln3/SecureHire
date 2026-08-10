@@ -33,13 +33,14 @@ export async function generateCredentialProof(
 }
 
 export async function verifyCredentialProof(proof: CredentialProof): Promise<boolean> {
+  // Semaphore v4: SemaphoreProof uses string fields (not bigint)
   const semaphoreProof = {
     merkleTreeDepth: proof.merkleTreeDepth,
-    merkleTreeRoot: BigInt(proof.merkleTreeRoot),
-    nullifier: BigInt(proof.nullifier),
-    message: BigInt(proof.message),
-    scope: BigInt(proof.scope),
-    points: proof.points.map(p => BigInt(p)),
+    merkleTreeRoot: proof.merkleTreeRoot,
+    nullifier: proof.nullifier,
+    message: proof.message,
+    scope: proof.scope,
+    points: proof.points as [string, string, string, string, string, string, string, string],
   };
   return verifyProof(semaphoreProof);
 }

@@ -14,6 +14,9 @@ struct Course {
 contract CourseRegistry is Ownable {
     mapping(uint256 => Course) public courses;
     mapping(string => uint256) public courseCodeToGroupId;
+    mapping(string => bool) public courseCodeExists;
+    mapping(uint256 => bool) public groupExists;
+
     uint256[] public allGroupIds;
     uint256 public courseCount;
     address public issuer;
@@ -30,8 +33,8 @@ contract CourseRegistry is Ownable {
     }
 
     function addCourse(string memory name, string memory code, uint256 groupId, address university) external onlyIssuer {
-        require(courses[groupId].groupId == 0, "Course already exists for this group");
-        require(courseCodeToGroupId[code] == 0, "Course code already exists");
+        require(!groupExists[groupId], "Course already exists for this group");
+        require(!courseCodeExists[code], "Course code already exists");
 
         courses[groupId] = Course({
             name: name,
@@ -41,6 +44,8 @@ contract CourseRegistry is Ownable {
             active: true
         });
 
+        groupExists[groupId] = true;
+        courseCodeExists[code] = true;
         courseCodeToGroupId[code] = groupId;
         allGroupIds.push(groupId);
         courseCount++;
@@ -55,6 +60,11 @@ contract CourseRegistry is Ownable {
     }
 
     function isValidCourse(uint256 groupId) external view returns (bool) {
-        return courses[groupId].active;
+        return groupExists[groupId] && courses[groupId].active;
+    }
+
+    function deactivateCourse(uint256 groupId) external onlyIssuer {
+        require(groupExists[groupId], "Course does not exist");
+        courses[groupId].active = false;
     }
 }

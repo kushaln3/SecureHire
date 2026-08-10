@@ -41,7 +41,6 @@ University                    Student                    Employer
 ## Project Structure
 
 ```
-├── _context/               # AI agent hand-off context files
 ├── apps/
 │   └── web/                # Next.js frontend — 4 portals
 ├── packages/
@@ -137,3 +136,12 @@ After deployment, copy the addresses from `packages/contracts/deployments/sepoli
 ## Team
 
 Built at IIT Guwahati for the Ethereum Foundation "Road to Devcon" Academic Program.
+
+---
+
+## Future Improvements
+
+While SecureHire currently uses a single ZK proof per course, the architecture can be extended for advanced selective disclosure and "Degree Proofs":
+
+1. **Multi-Proof Bundles (Selective Disclosure)**: Allow students to select multiple courses from their transcript (e.g., CS201, MATH301) and generate a proof for each. A new `verifyBatch()` contract function would loop through and verify the entire bundle in a single transaction, granting employers granular verification while costing only a single transaction gas fee.
+2. **Atomic Degree Groups**: Universities could create a special Semaphore group (e.g., "BTech CS 2026") and issue a credential once a student completes all prerequisites. This enables a student to prove they hold a full degree using a single, efficient ZK proof, eliminating the need to prove every individual course.

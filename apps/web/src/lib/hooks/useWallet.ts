@@ -8,6 +8,21 @@ export function useWallet() {
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
+  const switchAccount = useCallback(async () => {
+    if (typeof window === 'undefined' || !window.ethereum) return;
+    try {
+      await window.ethereum.request({
+        method: 'wallet_requestPermissions',
+        params: [{ eth_accounts: {} }]
+      });
+      // After permissions are granted, connect() will be triggered by accountsChanged
+      // or we can just call it manually
+      connect();
+    } catch (e) {
+      console.error('Switch account failed:', e);
+    }
+  }, []);
+
   const connect = useCallback(async () => {
     if (typeof window === 'undefined' || !window.ethereum) {
       alert('MetaMask not found. Please install MetaMask.');
@@ -35,8 +50,22 @@ export function useWallet() {
       window.ethereum.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
         if (accounts.length > 0) connect();
       });
+
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts.length > 0) {
+          connect();
+        } else {
+          setAddress(null);
+          setSigner(null);
+        }
+      };
+
+      (window.ethereum as any).on('accountsChanged', handleAccountsChanged);
+      return () => {
+        (window.ethereum as any).removeListener('accountsChanged', handleAccountsChanged);
+      };
     }
   }, [connect]);
 
-  return { address, provider, signer, connect, isConnecting };
+  return { address, provider, signer, connect, switchAccount, isConnecting };
 }

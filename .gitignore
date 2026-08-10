@@ -25,3 +25,9 @@ typechain-types/
 .DS_Store
 *.log
 .vercel
+
+# AI & Planning Context (Do not push to GitHub)
+_context/
+agent/
+ideas.md
+*.pdf

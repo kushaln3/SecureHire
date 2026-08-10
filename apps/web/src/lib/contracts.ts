@@ -1,3 +1,6 @@
+// RPC URL for read-only provider calls
+export const RPC_URL = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
+
 // Contract addresses - updated after deployment
 export const CONTRACTS = {
   semaphore: '0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D' as `0x${string}`,
@@ -18,6 +21,7 @@ export const CREDENTIAL_ISSUER_ABI = [
   'function revokeCredential(uint256 groupId, uint256 commitment) external',
   'function hasRole(bytes32 role, address account) external view returns (bool)',
   'function isUniversity(address wallet) external view returns (bool)',
+  'function credentialCount(uint256 groupId) external view returns (uint256)',
   'function getUniversity(address wallet) external view returns (tuple(string name, string metadata, bool approved, uint256 registeredAt))',
   'event RegistrationRequested(address indexed wallet, string name, string metadata)',
   'event UniversityApproved(address indexed wallet, string name)',

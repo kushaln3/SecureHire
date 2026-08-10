@@ -4,7 +4,13 @@ interface StepBadgeProps {
 
 export default function StepBadge({ step }: StepBadgeProps) {
   return (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-500/25 shrink-0">
+    <div style={{
+      width: '2rem', height: '2rem', borderRadius: '9999px',
+      background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'white', fontWeight: 700, fontSize: '0.875rem',
+      flexShrink: 0,
+    }}>
       {step}
     </div>
   );

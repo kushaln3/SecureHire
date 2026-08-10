@@ -1,4 +1,4 @@
-# Eternity-ID: Quantum-Safe Anonymous Credentials
+# HireShield: Quantum-Safe Anonymous Credentials
 
 ## The Core Concept
 A credentialing system that allows users to hold and prove their qualifications (like university degrees) anonymously and securely against future quantum computing threats.
@@ -17,8 +17,9 @@ Semaphore v4 introduced the ability for an anonymous identity to sign messages.
 - This allows for anonymous login to gated systems, or anonymous signing of contracts by a "Verified Graduate".
 
 ## System Flow (Ideation Phase)
-1. **Setup:** The University (Authority) creates a Semaphore Group.
-2. **Registration:** A student creates a Post-Quantum Smart Account (via Kohaku). They generate a Semaphore Identity and provide the public commitment to the University.
+1. **Setup (Top-Level):** The Ministry of Education (MoE) deploys the smart contract. They hold the `DEFAULT_ADMIN_ROLE` and are the only entity that can approve universities.
+2. **University Onboarding:** A University requests registration. The MoE approves them on-chain. The University then creates a Semaphore Group for a course (e.g., "DSAI Minor").
+3. **Registration:** A student creates a Post-Quantum Smart Account (via Kohaku). They generate a Semaphore Identity and provide the public commitment to the University.
 3. **Issuance (Transcript as a Tree):** The University issues a credential where the student's entire transcript (courses, grades) is hashed into a Merkle Tree. The University adds the student's commitment + transcript root to the Semaphore Group.
 4. **Verification (Selective Disclosure):** The student wants to apply for a Data Science job anonymously. They generate a ZK-proof off-chain, proving they are in the group AND proving that "DSAI Minor: Pass" is a valid leaf in their transcript tree, *without* revealing their other grades or their name.
 5. **Validation:** The employer's smart contract or backend verifies the proof. The employer definitively knows the applicant passed the DSAI minor and is a verified graduate, but knows nothing else about their academic history or identity.

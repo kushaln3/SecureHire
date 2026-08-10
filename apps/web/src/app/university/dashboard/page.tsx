@@ -1,114 +1,282 @@
-'use client';
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRole } from '../../../lib/hooks/useRole';
-import GlassCard from '../../../components/GlassCard';
+"use client";
+import { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { CONTRACTS, CREDENTIAL_ISSUER_ABI, COURSE_REGISTRY_ABI } from '@/lib/contracts';
+import { Button } from '@/components/ui/button';
+import { generateCredentialProof } from '@eternity-id/identity-vault'; 
+// Note: We use identity-vault indirectly via the smart contracts here, proof generation is for the student.
+
+interface Course {
+  groupId: number;
+  name: string;
+  code: string;
+  active: boolean;
+}
 
 export default function UniversityDashboard() {
-  const { isUniversity, isLoading } = useRole();
-  const [activeTab, setActiveTab] = useState<'courses' | 'issue'>('courses');
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseName, setCourseName] = useState("");
+  const [courseCode, setCourseCode] = useState("");
+  const [creating, setCreating] = useState(false);
+  
+  const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [studentCommitment, setStudentCommitment] = useState("");
+  const [issuing, setIssuing] = useState(false);
+  
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [universityName, setUniversityName] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  if (isLoading) {
-    return <div className="flex justify-center py-24"><div className="w-12 h-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin"></div></div>;
+  useEffect(() => {
+    checkAuthorization();
+    
+    if (typeof window !== 'undefined' && window.ethereum) {
+      const handleAccountsChanged = () => {
+        checkAuthorization();
+      };
+      (window.ethereum as any).on('accountsChanged', handleAccountsChanged);
+      return () => {
+        (window.ethereum as any).removeListener('accountsChanged', handleAccountsChanged);
+      };
+    }
+  }, []);
+
+  const checkAuthorization = async () => {
+    try {
+      if (!window.ethereum) return;
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const accounts = await provider.listAccounts();
+      if (accounts.length === 0) return;
+      
+      const signer = accounts[0];
+      const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
+      
+      const info = await contract.getUniversity(signer.address);
+      if (info.approved) {
+        setIsAuthorized(true);
+        setUniversityName(info.name);
+        await fetchCourses(provider, signer.address);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCourses = async (provider: ethers.BrowserProvider, universityAddress: string) => {
+    try {
+      const registry = new ethers.Contract(CONTRACTS.courseRegistry, COURSE_REGISTRY_ABI, provider);
+      // In a real app, we'd index this properly. For hackathon, we fetch all and filter.
+      const groupIds = await registry.getAllGroupIds();
+      
+      const fetchedCourses: Course[] = [];
+      for (const id of groupIds) {
+        const c = await registry.getCourse(id);
+        // c = [name, code, groupId, universityAddress, active]
+        if (c[3].toLowerCase() === universityAddress.toLowerCase()) {
+          fetchedCourses.push({
+            name: c[0],
+            code: c[1],
+            groupId: Number(c[2]),
+            active: c[4]
+          });
+        }
+      }
+      setCourses(fetchedCourses);
+      // fetch student counts in parallel after courses are set
+      await fetchCourseStudentCounts(provider, fetchedCourses);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!window.ethereum) return;
+    setCreating(true);
+    
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
+      
+      const tx = await contract.createCourse(courseName, courseCode);
+      await tx.wait();
+      
+      setCourseName("");
+      setCourseCode("");
+      alert("Course successfully created on-chain!");
+      await fetchCourses(provider, signer.address);
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to create course");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleIssueCredential = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroup || !studentCommitment) return alert("Select course and enter commitment");
+    if (!window.ethereum) return;
+    setIssuing(true);
+    
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
+      
+      const tx = await contract.issueCredential(selectedGroup, studentCommitment);
+      await tx.wait();
+      
+      setStudentCommitment("");
+      alert("Credential successfully issued to student!");
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to issue credential");
+    } finally {
+      setIssuing(false);
+    }
+  };
+
+  const fetchCourseStudentCounts = async (provider: ethers.BrowserProvider, fetchedCourses: Course[]) => {
+    try {
+      const issuer = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
+      const updated = await Promise.all(
+        fetchedCourses.map(async (c) => {
+          const count = await issuer.credentialCount(c.groupId);
+          return { ...c, studentCount: Number(count) };
+        })
+      );
+      setCourses(updated);
+    } catch (err) {
+      console.error('Failed to fetch student counts', err);
+    }
+  };
+
+  if (loading) return <div className="text-center py-24 text-slate-400 font-serif">Verifying permissions...</div>;
+  
+  if (!isAuthorized) {
+    return (
+      <div className="text-center py-24">
+        <h2 className="text-2xl font-serif text-slate-200 mb-4">Unauthorized Access</h2>
+        <p className="text-slate-400">You must be an approved University to view this dashboard.</p>
+      </div>
+    );
   }
 
-  // Allow bypassing the role check for demo purposes (optional)
-  // if (!isUniversity) {
-  //   return (
-  //     <div className="max-w-2xl mx-auto py-12 text-center">
-  //       <GlassCard>
-  //         <h1 className="text-2xl font-bold text-red-400 mb-4">Unauthorized</h1>
-  //         <p className="text-slate-400 mb-6">Your wallet does not have the UNIVERSITY_ROLE.</p>
-  //         <Link href="/university" className="btn-secondary">Go Back</Link>
-  //       </GlassCard>
-  //     </div>
-  //   );
-  // }
-
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex justify-between items-end mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">University Dashboard</h1>
-          <p className="text-slate-400">Manage courses and issue ZK credentials to students.</p>
-        </div>
-      </div>
+    <div className="max-w-6xl mx-auto py-12 animate-in fade-in duration-1000">
+      <header className="mb-12">
+        <h1 className="text-4xl font-serif font-bold text-slate-100 mb-2">
+          {universityName ? `${universityName} Dashboard` : "University Dashboard"}
+        </h1>
+        <p className="text-slate-400 font-serif italic">Manage your active courses and issue secure credentials.</p>
+      </header>
 
-      <div className="flex gap-4 mb-8 border-b border-white/10 pb-1">
-        <button 
-          onClick={() => setActiveTab('courses')}
-          className={`px-4 py-2 font-medium transition-colors border-b-2 -mb-[1px] ${activeTab === 'courses' ? 'text-indigo-400 border-indigo-500' : 'text-slate-400 border-transparent hover:text-white'}`}
-        >
-          Courses
-        </button>
-        <button 
-          onClick={() => setActiveTab('issue')}
-          className={`px-4 py-2 font-medium transition-colors border-b-2 -mb-[1px] ${activeTab === 'issue' ? 'text-indigo-400 border-indigo-500' : 'text-slate-400 border-transparent hover:text-white'}`}
-        >
-          Issue Credentials
-        </button>
-      </div>
-
-      {activeTab === 'courses' ? (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-bold text-white">Active Courses</h2>
-            <button className="btn-primary text-sm py-2 px-4">+ New Course</button>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <GlassCard>
-              <div className="text-xs font-mono text-indigo-400 mb-2">Group ID: 1042</div>
-              <h3 className="text-lg font-bold text-white mb-1">Data Structures & Algorithms</h3>
-              <p className="text-slate-400 text-sm mb-4">Code: CS201</p>
-              <div className="flex justify-between items-center pt-4 border-t border-white/10">
-                <span className="text-sm text-slate-400">Enrolled: 45</span>
-                <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-semibold">Active</span>
-              </div>
-            </GlassCard>
-          </div>
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 space-y-6">
-            <GlassCard title="Issue New Credential">
-              <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Select Course</label>
-                  <select className="w-full bg-navy-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                    <option value="1042">CS201 - Data Structures & Algorithms</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Student Commitment Hash</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-navy-950 border border-white/10 rounded-xl px-4 py-3 font-mono text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                    placeholder="0x..."
-                  />
-                  <p className="text-xs text-slate-500 mt-2">
-                    No student identity is stored on-chain — only commitment hashes. Privacy by design.
-                  </p>
-                </div>
-                <button type="submit" className="btn-primary w-full">Issue Credential on-chain</button>
-              </form>
-            </GlassCard>
-          </div>
-          
-          <div className="space-y-6">
-            <h3 className="text-lg font-bold text-white">Recent Issuances</h3>
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="glass p-4 text-sm">
-                  <div className="text-indigo-400 font-mono mb-1">0x7f2...a9b3</div>
-                  <div className="text-slate-300">CS201</div>
-                  <div className="text-slate-500 text-xs mt-2">2 hours ago</div>
-                </div>
-              ))}
+      <div className="grid md:grid-cols-2 gap-8 mb-12">
+        {/* Create Course Panel */}
+        <div className="p-8 border border-slate-800 bg-slate-900/50">
+          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Create New Course</h2>
+          <form onSubmit={handleCreateCourse} className="space-y-6">
+            <div>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Course Name</label>
+              <input 
+                type="text" required
+                value={courseName} onChange={e => setCourseName(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
+                placeholder="e.g. Data Structures"
+              />
             </div>
-          </div>
+            <div>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Course Code</label>
+              <input 
+                type="text" required
+                value={courseCode} onChange={e => setCourseCode(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
+                placeholder="e.g. CS201"
+              />
+            </div>
+            <Button type="submit" className="w-full" isLoading={creating}>
+              Create Course Group
+            </Button>
+          </form>
         </div>
-      )}
+
+        {/* Issue Credential Panel */}
+        <div className="p-8 border border-slate-800 bg-slate-900/50">
+          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Issue Credential</h2>
+          <form onSubmit={handleIssueCredential} className="space-y-6">
+            <div>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Select Course</label>
+              <select
+                required
+                value={selectedGroup || ""}
+                onChange={e => setSelectedGroup(Number(e.target.value))}
+                className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
+              >
+                <option value="" disabled>-- Select a Course --</option>
+                {courses.map(c => (
+                  <option key={c.groupId} value={c.groupId}>
+                    {c.code}: {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-serif text-slate-400 mb-2">Student Identity Commitment</label>
+              <input 
+                type="text" required
+                value={studentCommitment} onChange={e => setStudentCommitment(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500 font-mono text-sm"
+                placeholder="e.g. 170519033..."
+              />
+            </div>
+            <Button type="submit" className="w-full" isLoading={issuing}>
+              Issue to Student
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      {/* ── Active Courses List ─────────────────────────────── */}
+      <section className="border-t border-slate-800 pt-10">
+        <h2 className="text-2xl font-serif font-bold text-slate-200 mb-2">Active Courses</h2>
+        <p className="text-slate-500 text-sm font-serif italic mb-6">All courses registered on-chain for your institution.</p>
+
+        {courses.length === 0 ? (
+          <div className="p-10 border border-slate-800 bg-slate-900/30 text-center">
+            <p className="text-slate-500 font-serif italic">No courses created yet. Use the form above to create your first course.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {courses.map(c => (
+              <div
+                key={c.groupId}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 border border-slate-800 bg-slate-900/30"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 flex items-center justify-center border border-slate-700 bg-slate-800 text-slate-400 font-mono text-xs shrink-0">
+                    {c.code.slice(0, 3)}
+                  </div>
+                  <div>
+                    <p className="font-serif font-semibold text-slate-200">{c.name}</p>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">{c.code} · Group #{c.groupId}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 shrink-0">
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-slate-100">{(c as any).studentCount ?? '—'}</p>
+                    <p className="text-xs text-slate-500">credentials issued</p>
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${c.active ? 'bg-emerald-500' : 'bg-red-600'}`} title={c.active ? 'Active' : 'Inactive'} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

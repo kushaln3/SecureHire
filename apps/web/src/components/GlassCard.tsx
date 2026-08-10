@@ -8,8 +8,15 @@ interface GlassCardProps {
 
 export default function GlassCard({ children, title, className = '' }: GlassCardProps) {
   return (
-    <div className={`glass glass-hover p-6 rounded-2xl ${className}`}>
-      {title && <h3 className="text-xl font-bold text-white mb-4">{title}</h3>}
+    <div
+      className={className}
+      style={{
+        backgroundColor: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.09)',
+        padding: '1.5rem',
+      }}
+    >
+      {title && <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#f1f5f9', marginBottom: '1rem' }}>{title}</h3>}
       {children}
     </div>
   );
