@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureHire — IITG.eth Hackathon 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface-2: #1a1a25;
+    --border: #2a2a3a;
+    --accent: #6366f1;
+    --accent-dim: rgba(99,102,241,0.15);
+    --accent-2: #06b6d4;
+    --accent-2-dim: rgba(6,182,212,0.12);
+    --green: #10b981;
+    --red: #f43f5e;
+    --amber: #f59e0b;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  /* ── Layout ── */
+  #app { width: 100vw; height: 100vh; position: relative; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 44px 64px 110px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .slide.active {
+    display: flex;
+    animation: slideFadeIn 0.35s ease forwards;
+  }
+  @keyframes slideFadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Progress bar ── */
+  #progress-bar {
+    position: fixed; top: 0; left: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.4s ease;
+    z-index: 100;
+  }
+
+  /* ── Navigation ── */
+  #nav {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(17,17,24,0.9); backdrop-filter: blur(12px);
+    border: 1px solid var(--border); border-radius: 999px;
+    padding: 10px 20px; z-index: 100;
+  }
+  .nav-btn {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 18px; padding: 4px 8px;
+    border-radius: 6px; transition: color 0.2s, background 0.2s;
+    font-family: var(--sans);
+  }
+  .nav-btn:hover { color: var(--text); background: var(--surface-2); }
+  #slide-counter { font-size: 13px; color: var(--text-muted); min-width: 60px; text-align: center; }
+  #slide-dots { display: flex; gap: 6px; align-items: center; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); cursor: pointer; transition: all 0.2s;
+  }
+  .dot.active { background: var(--accent); width: 20px; border-radius: 3px; }
+
+  /* ── Slide Header ── */
+  .slide-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .slide-title {
+    font-size: clamp(24px, 3.2vw, 40px); font-weight: 700; line-height: 1.1;
+    color: var(--text); margin-bottom: 6px;
+  }
+  .slide-subtitle {
+    font-size: clamp(13px, 1.5vw, 16px); color: var(--text-dim); font-weight: 400;
+    margin-bottom: 24px; line-height: 1.5;
+  }
+  .divider { width: 40px; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 2px; margin-bottom: 24px; }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .card-accent { border-left: 3px solid var(--accent); }
+  .card-cyan { border-left: 3px solid var(--accent-2); }
+  .card-green { border-left: 3px solid var(--green); }
+  .card-amber { border-left: 3px solid var(--amber); }
+  .card-red { border-left: 3px solid var(--red); }
+  .card h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  .card p { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+  .card ul { list-style: none; }
+  .card ul li { font-size: 13px; color: var(--text-dim); line-height: 1.6; padding-left: 14px; position: relative; margin-bottom: 3px; }
+  .card ul li::before { content: '–'; position: absolute; left: 0; color: var(--text-muted); }
+
+  /* ── Code blocks ── */
+  .code-block {
+    background: #0d0d14; border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+    color: #a5b4fc; overflow-x: auto; margin-top: 12px;
+    white-space: pre;
+  }
+  .code-block .kw { color: #818cf8; }
+  .code-block .fn { color: #67e8f9; }
+  .code-block .str { color: #86efac; }
+  .code-block .cm { color: #475569; font-style: italic; }
+  .code-block .ty { color: #f0abfc; }
+
+  /* ── Tags & badges ── */
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 999px;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .tag-accent { background: var(--accent-dim); color: var(--accent); }
+  .tag-cyan { background: var(--accent-2-dim); color: var(--accent-2); }
+  .tag-green { background: rgba(16,185,129,0.12); color: var(--green); }
+  .tag-amber { background: rgba(245,158,11,0.12); color: var(--amber); }
+  .tag-red { background: rgba(244,63,94,0.12); color: var(--red); }
+
+  /* ── Title slide specifics ── */
+  #slide-0 { justify-content: center; align-items: flex-start; }
+  .hero-title {
+    font-size: clamp(52px, 8vw, 88px); font-weight: 700;
+    line-height: 1; letter-spacing: -2px;
+    background: linear-gradient(135deg, #e2e8f0 0%, var(--accent) 50%, var(--accent-2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 20px;
+  }
+  .hero-sub { font-size: 18px; color: var(--text-dim); max-width: 520px; line-height: 1.6; margin-bottom: 36px; }
+  .hero-meta { display: flex; gap: 16px; flex-wrap: wrap; }
+  .hero-badge {
+    font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: 6px;
+    border: 1px solid var(--border); color: var(--text-muted); background: var(--surface);
+  }
+
+  /* ── Architecture diagram ── */
+  .arch-flow {
+    display: flex; align-items: center; gap: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 32px; margin-bottom: 28px; overflow-x: auto;
+  }
+  .arch-node {
+    display: flex; flex-direction: column; align-items: center;
+    flex: 1; min-width: 120px;
+  }
+  .arch-node-inner {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 20px;
+    text-align: center; width: 100%;
+  }
+  .arch-node-inner .role { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 6px; }
+  .arch-node-inner .name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .arch-node .steps { font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center; line-height: 1.6; }
+  .arch-arrow {
+    font-size: 22px; color: var(--accent); padding: 0 8px; flex-shrink: 0;
+    display: flex; align-items: center;
+  }
+
+  /* ── Step list ── */
+  .step-list { display: flex; flex-direction: column; gap: 8px; }
+  .step {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .step-num {
+    font-size: 10px; font-weight: 700; color: var(--accent);
+    background: var(--accent-dim); border-radius: 4px;
+    padding: 2px 7px; flex-shrink: 0; margin-top: 2px;
+  }
+  .step-body { font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+  .step-body strong { color: var(--text); font-weight: 600; }
+
+  /* ── Function table ── */
+  .fn-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .fn-table th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .fn-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
+  .fn-table td:first-child { font-family: var(--mono); font-size: 11px; color: #67e8f9; white-space: nowrap; }
+  .fn-table tr:last-child td { border-bottom: none; }
+  .fn-table tr:hover td { background: var(--surface-2); }
+
+  /* ── Error cards ── */
+  .error-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; margin-bottom: 16px;
+  }
+  .error-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+  }
+  .error-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .error-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .error-body { padding: 14px 18px; }
+  .error-body p { font-size: 13px; color: var(--text-dim); line-height: 1.65; margin-bottom: 8px; }
+  .error-body p:last-child { margin-bottom: 0; }
+  .error-body strong { color: var(--text); font-weight: 500; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="progress-bar"></div>
+
+<div id="app">
+
+  <!-- ─────────────────────────── SLIDE 0: TITLE ─────────────────────────── -->
+  <div class="slide active" id="slide-0">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div class="slide-label">IITG.eth Hackathon 2026 &nbsp;·&nbsp; Ethereum Sepolia Testnet</div>
+      <div class="hero-title">SecureHire</div>
+      <p class="hero-sub">A zero-knowledge credential verification system. Prove your academic qualifications to employers without revealing your identity, wallet, or transcript.</p>
+      <div class="hero-meta">
+        <span class="hero-badge">Semaphore v4</span>
+        <span class="hero-badge">@kohaku-eth / provider</span>
+        <span class="hero-badge">Groth16 ZK Proofs</span>
+        <span class="hero-badge">Solidity 0.8.23</span>
+      </div>
+    </div>
+    <div style="margin-top:auto; padding-top: 40px;">
+      <p style="font-size:13px; color:var(--text-muted);">Kushal N &nbsp;·&nbsp; BTech Mathematics and Computing, 2nd Year &nbsp;·&nbsp; IIT Guwahati</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 1: PROBLEM ─────────────────────────── -->
+  <div class="slide" id="slide-1">
+    <div class="slide-label">01 &nbsp;·&nbsp; Problem Statement</div>
+    <div class="slide-title">The Credential Verification Crisis</div>
+    <div class="slide-subtitle">3 layered problems that the current system cannot solve.</div>
+    <div class="divider"></div>
+
+    <div class="grid-3" style="margin-bottom: 24px;">
+      <div class="card card-red">
+        <h3>The Broken Verification Process</h3>
+        <p>Currently, employers face a lengthy and inaccurate verification process. They have to manually verify certificates with universities, dealing with slow responses and inaccurate records. It is expensive and incredibly tedious for the companies.</p>
+      </div>
+      <div class="card card-amber">
+        <h3>The Over-Disclosure Trap</h3>
+        <p>Applying to different companies in different domains forces you to hand over your entire transcript. If you are applying to a new company while already employed elsewhere, you don't want your transcript stuck in a career network where your current employer might see it.</p>
+      </div>
+      <div class="card card-accent">
+        <h3>On-Chain Privacy &amp; Quantum Threat</h3>
+        <p>Ethereum is public. Paying gas to submit a credential proof permanently links your wallet to that identity. Furthermore, traditional wallets rely on ECDSA, making them vulnerable to future quantum computers.</p>
+      </div>
+    </div>
+
+    <div class="card" style="background: var(--surface-2);">
+      <h3 style="margin-bottom: 10px;">The Core Contradiction</h3>
+      <p>Employers need <strong style="color:var(--text)">verified truth</strong>. Students need <strong style="color:var(--text)">verifiable privacy</strong>. The current system forces a choice between the two. It should not. <strong style="color:var(--accent)">We try to solve this...</strong></p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 2: SOLUTION ─────────────────────────── -->
+  <div class="slide" id="slide-2">
+    <div class="slide-label">02 &nbsp;·&nbsp; Solution</div>
+    <div class="slide-title">Selective Disclosure via Zero-Knowledge Proofs</div>
+    <div class="slide-subtitle">The employer gets cryptographic certainty. The student reveals nothing else.</div>
+    <div class="divider"></div>
+
+    <div class="grid-2" style="margin-bottom: 24px; align-items: start;">
+      <div>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">01</div>
+            <div class="step-body"><strong>Student logs in and generates a commitment.</strong> The student generates an identity commitment and sends it to the university off-chain. The university verifies the person, approves their courses, and issues the credential by adding them to an anonymous Semaphore group.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">02</div>
+            <div class="step-body"><strong>Student selects what to prove.</strong> They choose one or more courses from their credential vault. No one can see what they did not select.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">03</div>
+            <div class="step-body"><strong>A Groth16 ZK Proof is generated in the browser itself.</strong> The proof mathematically guarantees group membership without revealing the member's identity.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">04</div>
+            <div class="step-body"><strong>Employer verifies on-chain.</strong> The smart contract validates the proof and records the nullifier. The proof is only usable for one time. The student's wallet is never mentioned.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card card-green">
+          <h3>What the Employer Sees</h3>
+          <ul>
+            <li>Verified: Passed DSAI Minor — true</li>
+            <li>Issued by: IIT Guwahati — true</li>
+            <li>Proof verified on Sepolia block #22,xxx — true</li>
+          </ul>
+        </div>
+        <div class="card card-accent" style="margin-top: 16px;">
+          <h3>What Remains Hidden</h3>
+          <ul>
+            <li>Student name and identity</li>
+            <li>Student's wallet address</li>
+            <li>Other courses and their grades</li>
+            <li>Which wallet paid the gas</li>
+          </ul>
+        </div>
+        <div class="card" style="margin-top: 16px; background: var(--surface-2); border-color: var(--border);">
+          <h3>The Mathematical Guarantee</h3>
+          <p>The proof is validated by <code style="font-family:var(--mono); font-size:12px; color: #67e8f9">semaphore.validateProof()</code> <strong style="color:var(--accent)">on-chain</strong>. It is not a policy or a promise — it is an arithmetic constraint that cannot be forged without breaking SHA-256.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 3: ARCHITECTURE ─────────────────────────── -->
+  <div class="slide" id="slide-3">
+    <div class="slide-label">03 &nbsp;·&nbsp; Architecture</div>
+    <div class="slide-title">System Architecture</div>
+    <div class="slide-subtitle">Three actors. Three smart contracts. One privacy primitive.</div>
+    <div class="divider"></div>
+
+    <div class="arch-flow">
+      <div class="arch-node">
+        <div class="arch-node-inner" style="border-color: var(--accent);">
+          <div class="role">Admin (MoE)</div>
+          <div class="name">SecureHire</div>
+        </div>
+        <div class="steps">Approves universities<br>(e.g. Ministry of Education)</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node">
+        <div class="arch-node-inner" style="border-color: var(--accent-2);">
+          <div class="role">Issuer</div>
+          <div class="name">University</div>
+        </div>
+        <div class="steps">UNIVERSITY_ROLE<br>Creates groups, issues credentials</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node">
+        <div class="arch-node-inner" style="border-color: var(--green);">
+          <div class="role">Prover</div>
+          <div class="name">Student</div>
+        </div>
+        <div class="steps">Semaphore Identity<br>Generates ZK Proof in the browser itself</div>
+      </div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node">
+        <div class="arch-node-inner" style="border-color: var(--amber);">
+          <div class="role">Verifier</div>
+          <div class="name">Employer</div>
+        </div>
+        <div class="steps">Submits proof via Kohaku<br>to safeguard their identity while paying gas</div>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <div class="card card-accent">
+        <h3>CourseRegistry.sol</h3>
+        <ul>
+          <li>Single source of truth for courses &amp; degrees</li>
+          <li>Maps groupId → Course struct</li>
+          <li><code style="font-family:var(--mono);font-size:11px;color:#67e8f9">isDegree</code> flag differentiates course vs. degree groups</li>
+          <li>Owned by deployer, written to by CredentialIssuer only</li>
+        </ul>
+      </div>
+      <div class="card card-cyan">
+        <h3>CredentialIssuer.sol</h3>
+        <ul>
+          <li>OpenZeppelin AccessControl — UNIVERSITY_ROLE</li>
+          <li>Calls <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">semaphore.createGroup()</code> and <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">semaphore.addMember()</code></li>
+          <li>Degree + course linking via <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">linkCourseToDegree()</code></li>
+          <li>Supports revocation via Semaphore's Merkle removal</li>
+        </ul>
+      </div>
+      <div class="card card-green">
+        <h3>CredentialVerifier.sol</h3>
+        <ul>
+          <li>Single proof: <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">verifyCredential()</code></li>
+          <li>Batch proof: <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">verifyBatch()</code> returns <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">bool[]</code></li>
+          <li>Nullifier tracking prevents reusing the same proof twice (replay attacks)</li>
+          <li>Uses try/catch — partial batch failures do not revert</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 4: PORTALS ─────────────────────────── -->
+  <div class="slide" id="slide-4">
+    <div class="slide-label">04 &nbsp;·&nbsp; Application Portals</div>
+    <div class="slide-title">4 Purpose-Built Interfaces</div>
+    <div class="slide-subtitle">Each portal is scoped to one actor. No portal leaks data from another.</div>
+    <div class="divider"></div>
+
+    <div class="grid-2">
+      <div class="card card-accent">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0">Admin Portal</h3>
+          <span class="tag tag-accent">/admin</span>
+        </div>
+        <ul>
+          <li>View all pending university registration requests</li>
+          <li>Approve or reject using <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">approveUniversity()</code></li>
+          <li>Revoke a university's role at any time (Fully implemented)</li>
+          <li>Wallet must hold DEFAULT_ADMIN_ROLE to access this page</li>
+        </ul>
+      </div>
+      <div class="card card-cyan">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0">University Portal</h3>
+          <span class="tag tag-cyan">/university</span>
+        </div>
+        <ul>
+          <li>Register with name + metadata; wait for admin approval</li>
+          <li>Dashboard: toggle between <strong style="color:var(--text)">Course</strong> and <strong style="color:var(--text)">Degree</strong> creation</li>
+          <li>Link courses to a degree group (full qualification)</li>
+          <li>Issue credentials by submitting a student's identity commitment</li>
+          <li>Degree badges visible on issued credentials</li>
+        </ul>
+      </div>
+      <div class="card card-green">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0">Student Portal</h3>
+          <span class="tag tag-green">/student</span>
+        </div>
+        <ul>
+          <li>Deterministic login: MetaMask signature → SHA-256 seed → Semaphore Identity</li>
+          <li>View all credentials issued to your identity commitment</li>
+          <li>Select mode: <strong style="color:var(--text)">Custom Selection</strong> (checkboxes) or <strong style="color:var(--text)">Full Degree</strong></li>
+          <li>Generates a multi-proof JSON bundle for submission</li>
+        </ul>
+      </div>
+      <div class="card card-amber">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <h3 style="margin:0">Employer Verification Portal</h3>
+          <span class="tag tag-amber">/verify</span>
+        </div>
+        <ul>
+          <li>Auto-detects single proof vs. multi-proof bundle JSON</li>
+          <li>Calls <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">verifyBatch()</code> via Kohaku's EthersSignerAdapter</li>
+          <li>Displays a per-proof result table (pass / fail / replay)</li>
+          <li>Employer never sees the student's wallet or identity</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 5: SEMAPHORE ─────────────────────────── -->
+  <div class="slide" id="slide-5">
+    <div class="slide-label">05 &nbsp;·&nbsp; Library Usage — Semaphore v4</div>
+    <div class="slide-title">How We Use Semaphore</div>
+    <div class="slide-subtitle">Every privacy guarantee in SecureHire is backed by Semaphore's ZK group membership protocol.</div>
+    <div class="divider"></div>
+
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+      <table class="fn-table">
+        <thead>
+          <tr>
+            <th>Function / Interface</th>
+            <th>Location</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>semaphore.createGroup(address)</td>
+            <td>CredentialIssuer.sol</td>
+            <td>Called in <code style="font-family:var(--mono);color:var(--text-dim)">createCourse()</code> and <code style="font-family:var(--mono);color:var(--text-dim)">createDegree()</code>. Deploys a new anonymous Merkle group on Semaphore v4 and returns its <code style="font-family:var(--mono);color:var(--text-dim)">groupId</code>.</td>
+          </tr>
+          <tr>
+            <td>semaphore.addMember(groupId, commitment)</td>
+            <td>CredentialIssuer.sol</td>
+            <td>Called in <code style="font-family:var(--mono);color:var(--text-dim)">issueCredential()</code>. Inserts a student's identity commitment into the course's Merkle tree, making them a group member without recording who they are.</td>
+          </tr>
+          <tr>
+            <td>semaphore.removeMember(groupId, commitment, proofSiblings)</td>
+            <td>CredentialIssuer.sol</td>
+            <td>Called in <code style="font-family:var(--mono);color:var(--text-dim)">revokeCredential()</code>. Removes a commitment using a Merkle sibling path, effectively revoking the credential.</td>
+          </tr>
+          <tr>
+            <td>semaphore.validateProof(groupId, proof)</td>
+            <td>CredentialVerifier.sol</td>
+            <td>Called inside <code style="font-family:var(--mono);color:var(--text-dim)">verifyCredential()</code> and wrapped in a try/catch inside <code style="font-family:var(--mono);color:var(--text-dim)">verifyBatch()</code>. Validates the Groth16 proof on-chain by checking the Merkle root and nullifier constraints.</td>
+          </tr>
+          <tr>
+            <td>new Identity(seed)</td>
+            <td>identity-vault / Student Portal</td>
+            <td>Creates a student's Semaphore identity client-side. The seed is derived deterministically from the student's MetaMask signature via SHA-256, so the same identity is always recovered on login.</td>
+          </tr>
+          <tr>
+            <td>generateProof(identity, group, message, scope)</td>
+            <td>Student Portal (browser)</td>
+            <td>Called when the student clicks "Generate Proof." Runs the Groth16 witness computation client-side using the Semaphore WASM circuit and returns the proof object.</td>
+          </tr>
+          <tr>
+            <td>ISemaphore.SemaphoreProof</td>
+            <td>CredentialVerifier.sol</td>
+            <td>The on-chain type definition for a submitted proof. Contains <code style="font-family:var(--mono);color:var(--text-dim)">merkleTreeDepth</code>, <code style="font-family:var(--mono);color:var(--text-dim)">merkleTreeRoot</code>, <code style="font-family:var(--mono);color:var(--text-dim)">nullifier</code>, <code style="font-family:var(--mono);color:var(--text-dim)">message</code>, <code style="font-family:var(--mono);color:var(--text-dim)">scope</code>, and <code style="font-family:var(--mono);color:var(--text-dim)">points</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card card-accent">
+      <h3>Nullifier Replay Prevention</h3>
+      <p>Each proof generates a unique <strong style="color:var(--text)">Nullifier Hash</strong> — a deterministic but opaque function of the student's secret and the job application scope. The contract records every used nullifier in <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">usedNullifiers[nullifier]</code>. Submitting the same proof a second time is rejected with "Nullifier already used" without ever revealing who submitted the first one.</p>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 6: KOHAKU ─────────────────────────── -->
+  <div class="slide" id="slide-6">
+    <div class="slide-label">06 &nbsp;·&nbsp; Library Usage — Kohaku</div>
+    <div class="slide-title">How We Use Kohaku</div>
+    <div class="slide-subtitle">We integrated @kohaku-eth/provider into the employer verification flow. The pq-account package is not yet public, so that part runs on a deterministic mock for now.</div>
+    <div class="divider"></div>
+
+    <div class="grid-2" style="align-items: start;">
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <h3 style="font-size:15px; font-weight:600;">@kohaku-eth/provider</h3>
+          <span class="tag tag-green">Active Implementation</span>
+        </div>
+        <p style="font-size:14px; color:var(--text-dim); margin-bottom: 12px; line-height:1.65;">Integrated into the Employer Verification portal. Because this is an alpha package, we manually encode the transaction payload and submit via Kohaku's <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">EthersSignerAdapter</code> instead of using standard ethers contract wrappers.</p>
+        <div class="code-block">
+<span class="kw">import</span> { <span class="fn">EthersSignerAdapter</span>, <span class="fn">createTx</span> }
+  <span class="kw">from</span> <span class="str">'@kohaku-eth/provider/ethers'</span>;
+
+<span class="cm">// 1. Manually encode the calldata</span>
+<span class="kw">const</span> data = contract.interface.<span class="fn">encodeFunctionData</span>(
+  <span class="str">"verifyBatch"</span>,
+  [proofs, groupIds]
+);
+
+<span class="cm">// 2. Wrap standard signer in Kohaku adapter</span>
+<span class="kw">const</span> kohakuSigner = <span class="kw">new</span> <span class="fn">EthersSignerAdapter</span>(standardSigner);
+
+<span class="cm">// 3. Build and send transaction through Kohaku</span>
+<span class="kw">const</span> tx = <span class="fn">createTx</span>(contractAddress, data, 0n);
+<span class="kw">await</span> kohakuSigner.<span class="fn">sendTransaction</span>(tx);
+        </div>
+      </div>
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <h3 style="font-size:15px; font-weight:600;">@kohaku-eth/pq-account</h3>
+          <span class="tag tag-amber">Architecture Stub</span>
+        </div>
+        <p style="font-size:14px; color:var(--text-dim); margin-bottom: 12px; line-height:1.65;">Each student's Semaphore identity is designed to be rooted in a CRYSTALS-Dilithium post-quantum key pair. The identity vault wrapper is production-ready; only the key generator falls back to a deterministic mock due to the package not being publicly available as an npm package yet.</p>
+        <div class="code-block">
+<span class="kw">export async function</span> <span class="fn">createPQAccount</span>(seed?: <span class="ty">string</span>) {
+  <span class="kw">try</span> {
+    <span class="cm">// Attempt real Kohaku import via dynamic import</span>
+    <span class="kw">const</span> kohaku = <span class="kw">await</span> <span class="kw">import</span>(<span class="str">'@kohaku-eth/pq-account'</span>);
+    <span class="kw">return</span> kohaku.<span class="fn">createPQAccount</span>(seed);
+  } <span class="kw">catch</span> {
+    <span class="cm">// Fallback: deterministic mock via SubtleCrypto SHA-256</span>
+    <span class="kw">return</span> <span class="fn">createMockPQAccount</span>(seed);
+  }
+}
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; margin-top: 20px;">
+          <h3 style="font-size:15px; font-weight:600;">Gas Privacy (No ERC-4337 Needed)</h3>
+          <span class="tag tag-accent">Architectural Win</span>
+        </div>
+        <p style="font-size:14px; color:var(--text-dim); line-height:1.65;">Instead of relying on complex ERC-4337 Paymasters or Railgun shielded transactions to hide the student's wallet, we completely decoupled proof <i>generation</i> from proof <i>submission</i>. The student generates the ZK proof off-chain in the browser (costs 0 gas). The employer submits the payload on-chain and pays the gas. The student never touches the blockchain, achieving perfect anonymity.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 7: ERRORS ─────────────────────────── -->
+  <div class="slide" id="slide-7">
+    <div class="slide-label">07 &nbsp;·&nbsp; Engineering Challenges</div>
+    <div class="slide-title">Problems We Encountered and Fixed</div>
+    <div class="slide-subtitle">Major blockers hit during the hackathon and how we resolved them.</div>
+    <div class="divider"></div>
+
+    <div class="grid-2" style="gap:12px; align-items:start;">
+
+      <div class="error-item">
+        <div class="error-header">
+          <div class="error-indicator" style="background:var(--red)"></div>
+          <div class="error-title">Scope Truncation — Identical Nullifiers in Batch Proofs</div>
+          <span class="tag tag-red" style="margin-left:auto">Identity Vault</span>
+        </div>
+        <div class="error-body">
+          <p><strong>Problem:</strong> Proof scope was computed as <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">Buffer.from(jobId+"-"+groupId).toString('hex').slice(0,16)</code>. Since the job ID was exactly 8 chars (16 hex), the slice removed the groupId entirely — every proof in a bundle had the same scope and the same nullifier, causing on-chain replay reverts.</p>
+          <p><strong>Fix:</strong> Replaced slice with <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">BigInt('0x' + ethers.id(`${groupId}-${jobId}`).slice(2,18))</code> — a Keccak256 hash guarantees unique scopes per course per job.</p>
+        </div>
+      </div>
+
+      <div class="error-item">
+        <div class="error-header">
+          <div class="error-indicator" style="background:var(--amber)"></div>
+          <div class="error-title">Parallel Transactions — MetaMask Nonce Conflict</div>
+          <span class="tag tag-amber" style="margin-left:auto">University Dashboard</span>
+        </div>
+        <div class="error-body">
+          <p><strong>Problem:</strong> Issuing credentials for multiple courses fired all <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">issueCredential()</code> calls in parallel. MetaMask signed all of them with the same nonce — all but the first failed on-chain.</p>
+          <p><strong>Fix:</strong> Switched to sequential execution with <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">await tx.wait()</code> between each call, with a live progress indicator: <em>"Issuing 2 / 3 — Please confirm in MetaMask."</em></p>
+        </div>
+      </div>
+
+      <div class="error-item">
+        <div class="error-header">
+          <div class="error-indicator" style="background:var(--accent)"></div>
+          <div class="error-title">Multi-Proof Bundle — False Failures on Verify Page</div>
+          <span class="tag tag-accent" style="margin-left:auto">Employer Portal</span>
+        </div>
+        <div class="error-body">
+          <p><strong>Problem:</strong> The verify UI only checked whether the transaction succeeded overall. For a 3-course bundle, any unselected courses were marked "not verified" even if valid proofs existed for them — creating false negatives for the employer.</p>
+          <p><strong>Fix:</strong> Redesigned to auto-detect single vs. bundle proof JSONs and iterate the returned <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">bool[]</code> array per course, showing individual pass/fail status for each credential.</p>
+        </div>
+      </div>
+
+      <div class="error-item">
+        <div class="error-header">
+          <div class="error-indicator" style="background:var(--green)"></div>
+          <div class="error-title">MetaMask Account Switch Not Reflected in UI</div>
+          <span class="tag tag-green" style="margin-left:auto">Frontend</span>
+        </div>
+        <div class="error-body">
+          <p><strong>Problem:</strong> After switching wallets in MetaMask, the University and Admin portals kept showing the old account's status. The <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">accountsChanged</code> event fired, but <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">BrowserProvider.listAccounts()</code> returned the stale cached address.</p>
+          <p><strong>Fix:</strong> Updated the handler to read the new address directly from the event payload (<code style="font-family:var(--mono);font-size:11px;color:#67e8f9">accounts[0]</code>) and pass it straight into the status check, bypassing the provider cache.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 8: SECURITY ─────────────────────────── -->
+  <div class="slide" id="slide-8">
+    <div class="slide-label">08 &nbsp;·&nbsp; Security &amp; Testing</div>
+    <div class="slide-title">Security &amp; Testing</div>
+    <div class="slide-subtitle">The attack vectors we designed against, and the access-control edge cases we tested.</div>
+    <div class="divider"></div>
+
+    <div class="grid-2" style="align-items:start;">
+      <div>
+        <h3 style="font-size:14px; font-weight:600; margin-bottom:14px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em;">Attack Vectors Covered</h3>
+        <div class="step-list">
+          <div class="step">
+            <div class="step-num">SEC-01</div>
+            <div class="step-body"><strong>Replay Attack.</strong> Submitting the same proof twice. The second submission hits the <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">usedNullifiers</code> check and reverts with "Nullifier already used."</div>
+          </div>
+          <div class="step">
+            <div class="step-num">SEC-02</div>
+            <div class="step-body"><strong>Invalid Group.</strong> Submitting a valid ZK proof against an unregistered <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">groupId</code>. Reverts with "Invalid course."</div>
+          </div>
+          <div class="step">
+            <div class="step-num">SEC-03</div>
+            <div class="step-body"><strong>Tampered Proof.</strong> Altering any <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">points[]</code> value in the proof before submission. <code style="font-family:var(--mono);font-size:12px;color:#67e8f9">semaphore.validateProof()</code> reverts on the arithmetic check.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">SEC-04</div>
+            <div class="step-body"><strong>Cross-Course Reuse.</strong> Using a proof generated for Course A on Course B's groupId. Reverts due to Merkle root mismatch — the student's commitment is simply not in Course B's tree.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-size:14px; font-weight:600; margin-bottom:14px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em;">Access Control Tests</h3>
+        <div class="card" style="margin-bottom:16px;">
+          <ul>
+            <li>Unregistered wallet calling <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">createCourse()</code> → reverts AccessControl</li>
+            <li>Wallet calling <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">requestRegistration()</code> twice → reverts "Already registered"</li>
+            <li>Admin calling <code style="font-family:var(--mono);font-size:11px;color:#67e8f9">approveUniversity()</code> for unapproved wallet → grants UNIVERSITY_ROLE correctly</li>
+            <li>Duplicate course code creation → reverts "Course code already exists"</li>
+            <li>Linking a course to a degree not owned by the same university → reverts "Not course owner"</li>
+          </ul>
+        </div>
+        <div class="card card-green">
+          <h3>Test Command</h3>
+          <div class="code-block" style="margin-top:8px; padding: 12px;">
+<span class="cm"># Smart contract tests</span>
+cd packages/contracts
+npx hardhat test
+
+<span class="cm"># Identity vault tests</span>
+cd packages/identity-vault
+pnpm test
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 9: DEPLOYMENT ─────────────────────────── -->
+  <div class="slide" id="slide-9">
+    <div class="slide-label">09 &nbsp;·&nbsp; Deployment</div>
+    <div class="slide-title">Live on Ethereum Sepolia</div>
+    <div class="slide-subtitle">All contracts are deployed and verified on Sepolia Testnet.</div>
+    <div class="divider"></div>
+
+    <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+      <table class="fn-table">
+        <thead>
+          <tr>
+            <th>Contract</th>
+            <th>Address</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Semaphore v4</td>
+            <td style="font-family:var(--mono); color: var(--text-dim)">0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D</td>
+            <td>Pre-deployed by PSE team</td>
+          </tr>
+          <tr>
+            <td>CourseRegistry</td>
+            <td style="font-family:var(--mono); color: var(--text-dim)">0x8895d0401384Dffd60E53df362D3f422e2A0bF23</td>
+            <td>Deployed this hackathon</td>
+          </tr>
+          <tr>
+            <td>CredentialIssuer</td>
+            <td style="font-family:var(--mono); color: var(--text-dim)">0x9499153dDf0bD0c8A6F173d0bD4cF0780183e85D</td>
+            <td>Deployed this hackathon</td>
+          </tr>
+          <tr>
+            <td>CredentialVerifier</td>
+            <td style="font-family:var(--mono); color: var(--text-dim)">0xAAe96283690450E6a869e2a44aAb4a04Cf453605</td>
+            <td>Deployed this hackathon</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid-3">
+      <div class="card card-accent">
+        <h3>Tech Stack</h3>
+        <ul>
+          <li>Next.js 15 (App Router)</li>
+          <li>Vanilla CSS (no UI framework)</li>
+          <li>Hardhat + OpenZeppelin</li>
+          <li>Semaphore v4 SDK</li>
+          <li>@kohaku-eth/provider</li>
+          <li>pnpm monorepo workspace</li>
+        </ul>
+      </div>
+      <div class="card card-cyan">
+        <h3>What We Would Do Next</h3>
+        <ul>
+          <li>Full Railgun integration for shielded issuance</li>
+          <li>Live @kohaku-eth/pq-account (Dilithium keys)</li>
+          <li>Mainnet deployment on Kohaku v1.0</li>
+          <li>Anonymous relayer for gas privacy</li>
+        </ul>
+      </div>
+      <div class="card card-green">
+        <h3>Prize Tracks</h3>
+        <ul>
+          <li>Best Use of Semaphore — entire credential flow runs on Semaphore v4</li>
+          <li>Best Use of Kohaku — active provider integration + PQ architecture</li>
+          <li>Privacy Innovation — selective disclosure of academic credentials</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────── SLIDE 10: CLOSING ─────────────────────────── -->
+  <div class="slide" id="slide-10">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <div class="slide-label">10 &nbsp;·&nbsp; Thank You</div>
+      <div class="hero-title" style="font-size: clamp(40px,6vw,64px);">Selective Disclosure.<br>Cryptographic Proof.</div>
+      <p class="hero-sub" style="margin-top:20px;">A student should never have to choose between proving their qualifications and protecting their identity. SecureHire makes both possible simultaneously — on-chain, without trust.</p>
+      <div style="display:flex; flex-direction:column; gap:12px; margin-top:40px; max-width: 500px;">
+        <div class="card" style="padding:16px 20px; background:var(--surface-2);">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.1em;">Built by</div>
+          <div style="font-size:17px; font-weight:600; color:var(--text);">Kushal N</div>
+          <div style="font-size:13px; color:var(--text-dim);">BTech Mathematics and Computing, 2nd Year &nbsp;·&nbsp; IIT Guwahati</div>
+        </div>
+        <div class="card" style="padding:16px 20px; background:var(--surface-2);">
+          <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.1em;">Event</div>
+          <div style="font-size:15px; font-weight:600; color:var(--text);">IITG.eth Hackathon 2026</div>
+          <div style="font-size:13px; color:var(--text-dim);">Ethereum Foundation — Road to Devcon Academic Program</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ── Navigation UI ── -->
+<div id="nav">
+  <button class="nav-btn" id="btn-prev">&#8592;</button>
+  <div id="slide-dots"></div>
+  <span id="slide-counter">1 / 11</span>
+  <button class="nav-btn" id="btn-next">&#8594;</button>
+</div>
+
+<script>
+  const TOTAL = 11;
+  let current = 0;
+
+  const progressBar = document.getElementById('progress-bar');
+  const counter = document.getElementById('slide-counter');
+  const dotsContainer = document.getElementById('slide-dots');
+  const slides = document.querySelectorAll('.slide');
+
+  // Build dots
+  for (let i = 0; i < TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(d);
+  }
+
+  function goTo(index) {
+    if (index === current || index < 0 || index >= TOTAL) return;
+    slides[current].classList.remove('active');
+    current = index;
+    slides[current].classList.add('active');
+    // Reset scroll position
+    slides[current].scrollTop = 0;
+    updateUI();
+  }
+
+  function updateUI() {
+    progressBar.style.width = ((current + 1) / TOTAL * 100) + '%';
+    counter.textContent = (current + 1) + ' / ' + TOTAL;
+    document.querySelectorAll('.dot').forEach((d, i) => d.classList.toggle('active', i === current));
+  }
+
+  document.getElementById('btn-prev').addEventListener('click', () => goTo(current - 1));
+  document.getElementById('btn-next').addEventListener('click', () => goTo(current + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(current + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(current - 1); }
+  });
+
+  updateUI();
+</script>
+</body>
+</html>
