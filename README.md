@@ -30,10 +30,10 @@ University                    Student                    Employer
 
 | Layer | Technology |
 |---|---|
-| **Anonymous Identity** | [Semaphore v4](https://semaphore.pse.dev) — ZK group membership proofs |
-| **Quantum-Safe Vault** | [Kohaku](https://github.com/ethereum/kohaku) `@kohaku-eth/pq-account` — Post-Quantum ERC-4337 |
+| **Anonymous Identity** | [Semaphore v4](https://semaphore.pse.dev) — ZK group membership proofs (live on Sepolia) |
+| **Quantum-Safe Vault** | [Kohaku](https://github.com/ethereum/kohaku) — PQ ERC-4337 account architecture |
 | **Smart Contracts** | Solidity 0.8.23 + Hardhat + OpenZeppelin |
-| **Frontend** | Next.js 14 (App Router) + Tailwind CSS |
+| **Frontend** | Next.js 15 (App Router) + Vanilla CSS |
 | **Network** | Ethereum Sepolia Testnet |
 
 ---
@@ -127,9 +127,68 @@ After deployment, copy the addresses from `packages/contracts/deployments/sepoli
 
 ## Prize Tracks
 
-- 🏆 **Best Use of Semaphore** — entire credential flow runs on Semaphore v4 ZK proofs
-- 🏆 **Best Use of Kohaku** — PQ account as quantum-safe identity vault
-- 🏆 **Privacy Innovation** — selective disclosure of academic credentials
+- 🏆 **Best Use of Semaphore** — entire credential flow (issuance → ZK proof → on-chain verification) runs on Semaphore v4
+- 🏆 **Best Use of Kohaku** — Post-Quantum ERC-4337 architecture designed throughout; see Kohaku Integration section below
+- 🏆 **Privacy Innovation** — selective disclosure of academic credentials with nullifier replay protection
+
+---
+
+## Kohaku Integration Architecture
+
+SecureHire is **architecturally designed** to integrate four Kohaku privacy primitives. Because several Kohaku packages (`pq-account`, Railgun wallet-side API) are still in active development and not yet available as public npm packages or require wallet-level mnemonic access, we have implemented these as architecture stubs that are drop-in replaceable once the Kohaku SDK is production-ready.
+
+### 1. Post-Quantum Identity Vault (`@kohaku-eth/pq-account`)
+
+Each student's Semaphore ZK identity is **designed to be rooted in a CRYSTALS-Dilithium (MLDSA) post-quantum key pair** rather than ECDSA.
+
+```ts
+// Designed integration (packages/identity-vault/src/pq-account.ts)
+const account = await createPQAccount(); // Deploys ERC-4337 PKContract with 20kB Dilithium pubkey
+const seed = keccak256(account.dilithiumPublicKey);
+const identity = new Identity(seed); // Semaphore identity anchored to quantum-safe key
+```
+
+**Current stub:** 64-byte mock key is generated and used as the seed. The Identity Vault wrapper (`packages/identity-vault/`) is production-ready; only the key generator is mocked.
+
+### 2. Shielded Credential Issuance (`@kohaku-eth/railgun`)
+
+When a university issues credentials, the transaction is currently visible on Etherscan. The architecture calls for routing through Railgun so metadata (graduation counts, timing) is hidden.
+
+```ts
+// Designed integration (apps/web/src/app/university/dashboard/page.tsx)
+const railgun = await createRailgunPlugin(host, {});
+const shieldedTx = await railgun.prepareShield({ asset: 'eth', amount: 0n });
+// Issue credential through Railgun relayer — metadata-private
+```
+
+**Current stub:** Direct MetaMask transaction to `CredentialIssuer.sol`. Blocked by: Railgun plugin requires BIP-32 mnemonic which MetaMask does not expose to dApps by design.
+
+### 3. Shielded Employer Verification (`@kohaku-eth/railgun`)
+
+Employers verifying a proof would pay a small fee privately so students cannot correlate which company verified their credentials.
+
+```ts
+// Designed integration (apps/web/src/app/verify/page.tsx)
+const privateTx = await railgun.prepareUnshield(
+  { asset: 'eth', amount: parseEther('0.01') },
+  SECUREHIRE_TREASURY_ADDRESS
+);
+await railgun.broadcastPrivateOperation(privateTx);
+```
+
+**Current stub:** Verification is free; no fee mechanism implemented.
+
+### 4. Privacy RPC Provider (`@kohaku-eth/provider`)
+
+All blockchain reads route through Kohaku's provider interface, which is designed to work with Helios light clients to prevent IP-address correlation via Infura/Alchemy.
+
+```ts
+// Designed integration
+import { ethers as kohakuEthers } from '@kohaku-eth/provider';
+const provider = kohakuEthers(new ethers.BrowserProvider(window.ethereum));
+```
+
+**Current stub:** `ethers.BrowserProvider(window.ethereum)` used directly.
 
 ---
 
@@ -141,7 +200,6 @@ Built at IIT Guwahati for the Ethereum Foundation "Road to Devcon" Academic Prog
 
 ## Future Improvements
 
-While SecureHire currently uses a single ZK proof per course, the architecture can be extended for advanced selective disclosure and "Degree Proofs":
-
-1. **Multi-Proof Bundles (Selective Disclosure)**: Allow students to select multiple courses from their transcript (e.g., CS201, MATH301) and generate a proof for each. A new `verifyBatch()` contract function would loop through and verify the entire bundle in a single transaction, granting employers granular verification while costing only a single transaction gas fee.
-2. **Atomic Degree Groups**: Universities could create a special Semaphore group (e.g., "BTech CS 2026") and issue a credential once a student completes all prerequisites. This enables a student to prove they hold a full degree using a single, efficient ZK proof, eliminating the need to prove every individual course.
+1. **Multi-Proof Bundles (Selective Disclosure)**: Students select multiple courses, generate a proof per course, and submit as a bundle. A new `verifyBatch()` contract function verifies all in one transaction.
+2. **Atomic Degree Groups**: Universities create a special Semaphore group for a full degree. One proof covers the entire qualification.
+3. **Full Kohaku Integration**: As `@kohaku-eth/pq-account` matures and Railgun gains a wallet-side dApp API, all four architecture stubs above become live integrations with zero changes to the application logic.
