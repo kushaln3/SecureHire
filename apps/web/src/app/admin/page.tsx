@@ -33,6 +33,18 @@ export default function AdminPage() {
     return () => { isMounted = false; };
   }, [address]);
 
+  // Listen for MetaMask account changes and force page reload so address state updates cleanly
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.ethereum) return;
+    const handleAccountsChanged = () => {
+      window.location.reload();
+    };
+    (window.ethereum as any).on('accountsChanged', handleAccountsChanged);
+    return () => {
+      (window.ethereum as any).removeListener('accountsChanged', handleAccountsChanged);
+    };
+  }, []);
+
   const checkAdminStatus = async (isMounted: boolean) => {
     setLoading(true);
     try {
@@ -104,6 +116,29 @@ export default function AdminPage() {
     } catch (err: any) {
       console.error(err);
       alert(err.reason || "Failed to approve. Are you the MoE Admin?");
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleRevoke = async (wallet: string) => {
+    if (!window.ethereum) return alert("Please install MetaMask!");
+    if (!confirm("Are you sure you want to revoke this university? They will lose access to issue credentials.")) return;
+    
+    setProcessing(wallet);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
+      
+      const tx = await contract.revokeUniversity(wallet);
+      await tx.wait();
+      
+      alert("University revoked successfully!");
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.reason || "Failed to revoke.");
     } finally {
       setProcessing(null);
     }
@@ -184,9 +219,19 @@ export default function AdminPage() {
                         <p className="font-serif font-bold text-slate-200">{uni.name}</p>
                         <p className="font-mono text-xs text-slate-600 mt-1">{uni.address}</p>
                       </div>
-                      <span className="text-xs text-slate-500 bg-slate-800 px-3 py-1 border border-slate-700">
-                        {uni.courses.length} course{uni.courses.length !== 1 ? 's' : ''} ▾
-                      </span>
+                      <div className="flex items-center gap-4">
+                        <Button 
+                          variant="outline" 
+                          className="border-red-900/50 text-red-500 hover:bg-red-950/30 text-xs py-1 h-8"
+                          onClick={(e) => { e.preventDefault(); handleRevoke(uni.address); }}
+                          isLoading={processing === uni.address}
+                        >
+                          Revoke
+                        </Button>
+                        <span className="text-xs text-slate-500 bg-slate-800 px-3 py-1 border border-slate-700">
+                          {uni.courses.length} course{uni.courses.length !== 1 ? 's' : ''} ▾
+                        </span>
+                      </div>
                     </summary>
                     <div className="px-6 pb-4">
                       {uni.courses.length === 0 ? (

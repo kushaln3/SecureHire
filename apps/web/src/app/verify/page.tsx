@@ -5,6 +5,8 @@ import { CONTRACTS, CREDENTIAL_VERIFIER_ABI } from '@/lib/contracts';
 import { Button } from '@/components/ui/button';
 import { encodeProofForContract } from '@eternity-id/identity-vault';
 import { useUniversities } from '@/lib/hooks/useUniversities';
+import { createTx } from '@kohaku-eth/provider';
+import { EthersSignerAdapter } from '@kohaku-eth/provider/ethers';
 
 
 export default function VerifyPortal() {
@@ -64,7 +66,7 @@ export default function VerifyPortal() {
         throw new Error("No proofs found in the provided JSON that match your required credentials.");
       }
 
-      const groupIds = proofsToVerify.map((p: any) => Number(p.groupId || p.scope));
+      const groupIds = proofsToVerify.map((p: any) => BigInt(p.groupId || p.scope));
       const formattedProofs = proofsToVerify.map((p: any) => encodeProofForContract(p));
       
       let boolResults: boolean[];
@@ -75,8 +77,21 @@ export default function VerifyPortal() {
         throw new Error("One or more proofs are cryptographically invalid or already used.");
       }
       
-      const txResponse = await contract.verifyBatch(formattedProofs, groupIds);
-      await txResponse.wait();
+      // -- KOHAKU INTEGRATION --
+      // Instead of relying on ethers.js to magically encode and submit the transaction,
+      // we use Kohaku's provider abstraction to construct and send the payload.
+      const payload = contract.interface.encodeFunctionData("verifyBatch", [formattedProofs, groupIds]);
+      const tx = createTx(CONTRACTS.credentialVerifier, payload);
+      
+      const kohakuSigner = new EthersSignerAdapter(signer as any);
+      const txHash = await kohakuSigner.sendTransaction(tx);
+      
+      // Wait for it to be mined using standard ethers provider
+      const receipt = await provider.waitForTransaction(txHash);
+      if (receipt && receipt.status === 0) {
+        throw new Error("Transaction reverted on-chain (possibly a replay attack)");
+      }
+      // ------------------------
       
       const results: {groupId: number, courseName: string, valid: boolean, missing?: boolean}[] = proofsToVerify.map((p: any, i: number) => ({
         groupId: Number(p.groupId || p.scope),

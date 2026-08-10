@@ -14,10 +14,15 @@ export default function UniversityGateway() {
   useEffect(() => {
     let isMounted = true;
     checkStatus(isMounted);
-    
+
     if (typeof window !== 'undefined' && window.ethereum) {
-      const handleAccountsChanged = () => {
-        checkStatus(isMounted);
+      const handleAccountsChanged = (accounts: string[]) => {
+        setWalletStatus('loading');
+        if (accounts.length === 0) {
+          if (isMounted) setWalletStatus('none');
+        } else {
+          checkStatus(isMounted, accounts[0]);
+        }
       };
       (window.ethereum as any).on('accountsChanged', handleAccountsChanged);
       return () => {
@@ -28,15 +33,20 @@ export default function UniversityGateway() {
     return () => { isMounted = false; };
   }, []);
 
-  const checkStatus = async (isMounted: boolean = true) => {
+  const checkStatus = async (isMounted: boolean = true, overrideAddress?: string) => {
     try {
       if (!window.ethereum) return isMounted && setWalletStatus('none');
       const provider = new ethers.BrowserProvider(window.ethereum as any);
-      const accounts = await provider.listAccounts();
-      if (accounts.length === 0) return isMounted && setWalletStatus('none');
+
+      let address: string | undefined = overrideAddress;
+      if (!address) {
+        const accounts = await provider.listAccounts();
+        if (accounts.length === 0) return isMounted && setWalletStatus('none');
+        address = accounts[0].address;
+      }
 
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
-      const info = await contract.getUniversity(accounts[0].address);
+      const info = await contract.getUniversity(address);
 
       if (isMounted) {
         if (info.approved) setWalletStatus('approved');
