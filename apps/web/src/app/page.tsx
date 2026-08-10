@@ -65,20 +65,7 @@ export default function Home() {
         ))}
       </section>
 
-      {/* Stats */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
-        {[
-          { label: 'Credentials Issued', value: '47' },
-          { label: 'Verifications', value: '12' },
-          { label: 'Universities', value: '3' },
-          { label: 'Privacy Breaches', value: '0' },
-        ].map((stat) => (
-          <div key={stat.label} style={{ border: '1px solid rgba(255,255,255,0.07)', backgroundColor: 'rgba(255,255,255,0.03)', padding: '1.5rem', textAlign: 'center' }}>
-            <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '2.25rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.375rem' }}>{stat.value}</div>
-            <div style={{ fontSize: '0.6875rem', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>{stat.label}</div>
-          </div>
-        ))}
-      </section>
+
 
       {/* How It Works */}
       <section style={{ paddingBottom: '3rem' }}>
