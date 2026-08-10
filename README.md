@@ -1,4 +1,4 @@
-﻿# SecureHire
+# SecureHire
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D8.0.0-orange.svg)](https://pnpm.io)
@@ -6,6 +6,7 @@
 [![Next.js](https://img.shields.io/badge/next.js-15-black.svg)](https://nextjs.org)
 [![Network](https://img.shields.io/badge/network-sepolia-purple.svg)](https://sepolia.etherscan.io)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](#license)
+[![Live Demo](https://img.shields.io/badge/live%20demo-vercel-black.svg)](https://secure-hire-web.vercel.app)
 
 > IITG.eth Hackathon 2026 — Building Private Apps using Ethereum
 > IIT Guwahati | August 9-10, 2026
@@ -13,6 +14,8 @@
 A zero-knowledge credential verification system. Students prove they passed specific university courses to employers — without revealing their identity, wallet address, or anything else on their transcript.
 
 **Selective disclosure. Cryptographic proof. Quantum-safe architecture.**
+
+**Live app:** https://secure-hire-web.vercel.app
 
 > **Package naming note:** The internal monorepo packages are named under `@eternity-id/*` (the project's original working title). The product is called **SecureHire**.
 
@@ -330,6 +333,10 @@ Identity was generated randomly on each login. Clearing the browser cache produc
 | CourseRegistry | `0x8895d0401384Dffd60E53df362D3f422e2A0bF23` |
 | CredentialIssuer | `0x9499153dDf0bD0c8A6F173d0bD4cF0780183e85D` |
 | CredentialVerifier | `0xAAe96283690450E6a869e2a44aAb4a04Cf453605` |
+
+**Live app:** https://secure-hire-web.vercel.app
+
+**GitHub:** https://github.com/kushaln3/SecureHire
 
 ---
 
