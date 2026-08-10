@@ -12,35 +12,40 @@ export default function UniversityGateway() {
   const [metadata, setMetadata] = useState('');
 
   useEffect(() => {
-    checkStatus();
+    let isMounted = true;
+    checkStatus(isMounted);
     
     if (typeof window !== 'undefined' && window.ethereum) {
       const handleAccountsChanged = () => {
-        checkStatus();
+        checkStatus(isMounted);
       };
       (window.ethereum as any).on('accountsChanged', handleAccountsChanged);
       return () => {
+        isMounted = false;
         (window.ethereum as any).removeListener('accountsChanged', handleAccountsChanged);
       };
     }
+    return () => { isMounted = false; };
   }, []);
 
-  const checkStatus = async () => {
+  const checkStatus = async (isMounted: boolean = true) => {
     try {
-      if (!window.ethereum) return setWalletStatus('none');
+      if (!window.ethereum) return isMounted && setWalletStatus('none');
       const provider = new ethers.BrowserProvider(window.ethereum as any);
       const accounts = await provider.listAccounts();
-      if (accounts.length === 0) return setWalletStatus('none');
+      if (accounts.length === 0) return isMounted && setWalletStatus('none');
 
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
       const info = await contract.getUniversity(accounts[0].address);
 
-      if (info.approved) setWalletStatus('approved');
-      else if (Number(info.registeredAt) > 0) setWalletStatus('pending');
-      else setWalletStatus('none');
+      if (isMounted) {
+        if (info.approved) setWalletStatus('approved');
+        else if (Number(info.registeredAt) > 0) setWalletStatus('pending');
+        else setWalletStatus('none');
+      }
     } catch (err) {
       console.error(err);
-      setWalletStatus('none');
+      if (isMounted) setWalletStatus('none');
     }
   };
 

@@ -309,7 +309,7 @@ export default function StudentPortal() {
                 <h3 className="font-serif font-bold text-slate-200">Proof Payload</h3>
                 <button 
                   className="text-xs text-slate-400 hover:text-white"
-                  onClick={() => navigator.clipboard.writeText(JSON.stringify(proofResult, null, 2))}
+                  onClick={() => navigator.clipboard.writeText(JSON.stringify(proofResult, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2))}
                 >
                   Copy JSON
                 </button>
@@ -317,12 +317,12 @@ export default function StudentPortal() {
               <div className="grid md:grid-cols-3 gap-6 items-start">
                 <div className="md:col-span-2">
                   <pre className="text-xs text-slate-400 font-mono bg-slate-950 border border-slate-800 p-4 overflow-x-auto max-h-64">
-                    {JSON.stringify(proofResult, null, 2)}
+                    {JSON.stringify(proofResult, (key, value) => typeof value === 'bigint' ? value.toString() : value, 2)}
                   </pre>
                 </div>
                 <div className="flex flex-col items-center justify-center p-6 bg-slate-950 border border-slate-800">
                   <div className="bg-white p-2 mb-4">
-                    <QRCodeSVG value={JSON.stringify(proofResult)} size={150} />
+                    <QRCodeSVG value={JSON.stringify(proofResult, (key, value) => typeof value === 'bigint' ? value.toString() : value)} size={150} />
                   </div>
                   <span className="text-xs font-serif text-slate-400 text-center">Scan with Verifier App or copy JSON to Employer Portal</span>
                 </div>

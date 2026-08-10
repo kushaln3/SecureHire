@@ -9,7 +9,9 @@ export const CONTRACTS = {
   credentialVerifier: (process.env.NEXT_PUBLIC_CREDENTIAL_VERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const;
 
-export const UNIVERSITY_ROLE = '0x' + Buffer.from('UNIVERSITY_ROLE').toString('hex').padStart(64, '0');
+import { ethers } from 'ethers';
+
+export const UNIVERSITY_ROLE = ethers.keccak256(ethers.toUtf8Bytes("UNIVERSITY_ROLE"));
 // Correct: UNIVERSITY_ROLE = keccak256("UNIVERSITY_ROLE") - use ethers.keccak256(ethers.toUtf8Bytes("UNIVERSITY_ROLE"))
 
 // Minimal ABIs (enough for the UI interactions)
@@ -18,7 +20,7 @@ export const CREDENTIAL_ISSUER_ABI = [
   'function approveUniversity(address wallet) external',
   'function createCourse(string calldata name, string calldata code) external returns (uint256)',
   'function issueCredential(uint256 groupId, uint256 commitment) external',
-  'function revokeCredential(uint256 groupId, uint256 commitment) external',
+  'function revokeCredential(uint256 groupId, uint256 commitment, uint256[] calldata proofSiblings) external',
   'function hasRole(bytes32 role, address account) external view returns (bool)',
   'function isUniversity(address wallet) external view returns (bool)',
   'function credentialCount(uint256 groupId) external view returns (uint256)',

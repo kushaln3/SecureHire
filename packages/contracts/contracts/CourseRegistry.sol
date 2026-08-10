@@ -29,6 +29,7 @@ contract CourseRegistry is Ownable {
     constructor() Ownable(msg.sender) {}
 
     function setIssuer(address _issuer) external onlyOwner {
+        require(_issuer != address(0), "Zero issuer address");
         issuer = _issuer;
     }
 

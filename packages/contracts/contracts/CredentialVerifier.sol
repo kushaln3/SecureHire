@@ -16,6 +16,8 @@ contract CredentialVerifier {
     event CredentialVerified(uint256 indexed groupId, uint256 indexed nullifier, uint256 message, bool valid);
 
     constructor(address semaphoreAddress, address courseRegistryAddress) {
+        require(semaphoreAddress != address(0), "Zero semaphore address");
+        require(courseRegistryAddress != address(0), "Zero registry address");
         semaphore = ISemaphore(semaphoreAddress);
         courseRegistry = ICourseRegistryVerifier(courseRegistryAddress);
     }

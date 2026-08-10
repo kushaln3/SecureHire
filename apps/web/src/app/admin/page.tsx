@@ -23,35 +23,37 @@ export default function AdminPage() {
   const { universities, loading: uniLoading } = useUniversities();
 
   useEffect(() => {
+    let isMounted = true;
     if (address) {
-      checkAdminStatus();
+      checkAdminStatus(isMounted);
     } else {
       setIsAdmin(false);
       setLoading(false);
     }
+    return () => { isMounted = false; };
   }, [address]);
 
-  const checkAdminStatus = async () => {
+  const checkAdminStatus = async (isMounted: boolean) => {
     setLoading(true);
     try {
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
       // ethers.ZeroHash is equivalent to bytes32(0), the DEFAULT_ADMIN_ROLE
       const hasAdminRole = await contract.hasRole(ethers.ZeroHash, address);
-      setIsAdmin(hasAdminRole);
+      if (isMounted) setIsAdmin(hasAdminRole);
       
       if (hasAdminRole) {
-        await fetchPending();
+        await fetchPending(isMounted);
       }
     } catch (err) {
       console.error(err);
-      setIsAdmin(false);
+      if (isMounted) setIsAdmin(false);
     } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   };
 
-  const fetchPending = async () => {
+  const fetchPending = async (isMounted: boolean = true) => {
     try {
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
@@ -77,11 +79,11 @@ export default function AdminPage() {
         }
       }
       
-      setPending(pendingList);
+      if (isMounted) setPending(pendingList);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   };
 

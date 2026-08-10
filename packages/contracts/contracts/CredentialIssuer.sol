@@ -6,6 +6,7 @@ import "@semaphore-protocol/contracts/interfaces/ISemaphore.sol";
 
 interface ICourseRegistry {
     function addCourse(string calldata name, string calldata code, uint256 groupId, address university) external;
+    function isValidCourse(uint256 groupId) external view returns (bool);
 }
 
 contract CredentialIssuer is AccessControl {
@@ -34,6 +35,8 @@ contract CredentialIssuer is AccessControl {
     event UniversityRevoked(address indexed wallet);
 
     constructor(address semaphoreAddress, address courseRegistryAddress) {
+        require(semaphoreAddress != address(0), "Zero semaphore address");
+        require(courseRegistryAddress != address(0), "Zero registry address");
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         semaphore = ISemaphore(semaphoreAddress);
         courseRegistry = ICourseRegistry(courseRegistryAddress);
@@ -83,13 +86,17 @@ contract CredentialIssuer is AccessControl {
     }
 
     function issueCredential(uint256 groupId, uint256 commitment) external onlyRole(UNIVERSITY_ROLE) {
+        require(courseRegistry.isValidCourse(groupId), "Invalid course group");
         semaphore.addMember(groupId, commitment);
         credentialCount[groupId]++;
         emit CredentialIssued(groupId, commitment, block.timestamp);
     }
 
-    function revokeCredential(uint256 groupId, uint256 commitment) external onlyRole(UNIVERSITY_ROLE) {
+    function revokeCredential(uint256 groupId, uint256 commitment, uint256[] calldata proofSiblings) external onlyRole(UNIVERSITY_ROLE) {
+        require(courseRegistry.isValidCourse(groupId), "Invalid course group");
+        require(!isRevoked[groupId][commitment], "Already revoked");
         isRevoked[groupId][commitment] = true;
+        semaphore.removeMember(groupId, commitment, proofSiblings);
         emit CredentialRevoked(groupId, commitment);
     }
 

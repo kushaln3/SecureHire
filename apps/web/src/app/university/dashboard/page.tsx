@@ -43,10 +43,16 @@ export default function UniversityDashboard() {
 
   const checkAuthorization = async () => {
     try {
-      if (!window.ethereum) return;
+      if (!window.ethereum) {
+        setIsAuthorized(false);
+        return;
+      }
       const provider = new ethers.BrowserProvider(window.ethereum as any);
       const accounts = await provider.listAccounts();
-      if (accounts.length === 0) return;
+      if (accounts.length === 0) {
+        setIsAuthorized(false);
+        return;
+      }
       
       const signer = accounts[0];
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, provider);
@@ -56,9 +62,14 @@ export default function UniversityDashboard() {
         setIsAuthorized(true);
         setUniversityName(info.name);
         await fetchCourses(provider, signer.address);
+      } else {
+        setIsAuthorized(false);
+        setUniversityName("");
+        setCourses([]);
       }
     } catch (err) {
       console.error(err);
+      setIsAuthorized(false);
     } finally {
       setLoading(false);
     }
@@ -109,8 +120,7 @@ export default function UniversityDashboard() {
       alert("Course successfully created on-chain!");
       await fetchCourses(provider, signer.address);
     } catch (err: any) {
-      console.error(err);
-      alert("Failed to create course");
+      alert(err.reason || err.message || "Failed to create course");
     } finally {
       setCreating(false);
     }
@@ -133,8 +143,7 @@ export default function UniversityDashboard() {
       setStudentCommitment("");
       alert("Credential successfully issued to student!");
     } catch (err: any) {
-      console.error(err);
-      alert("Failed to issue credential");
+      alert(err.reason || err.message || "Failed to issue credential");
     } finally {
       setIssuing(false);
     }

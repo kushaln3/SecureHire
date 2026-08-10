@@ -39,6 +39,10 @@ export default function VerifyPortal() {
     try {
       const parsedProof = JSON.parse(proofJson);
       
+      if (!parsedProof || typeof parsedProof !== 'object') {
+        throw new Error("Invalid proof format: not a JSON object");
+      }
+
       // Ensure the proof matches the selected group
       if (Number(parsedProof.groupId) !== selectedGroup) {
         throw new Error("Proof does not match the selected course requirement.");

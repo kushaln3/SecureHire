@@ -57,6 +57,7 @@ export function useWallet() {
         } else {
           setAddress(null);
           setSigner(null);
+          setProvider(null);
         }
       };
 
