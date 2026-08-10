@@ -103,11 +103,18 @@ export default function Home() {
       </section>
 
       {/* Presentation Link */}
+      <style>{`
+        .presentation-link:hover {
+          background-color: rgba(165,180,252,0.12) !important;
+          border-color: rgba(165,180,252,0.5) !important;
+        }
+      `}</style>
       <section style={{ textAlign: 'center', paddingBottom: '3rem' }}>
         <a
           href="/presentation.html"
           target="_blank"
           rel="noopener noreferrer"
+          className="presentation-link"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '0.625rem',
             padding: '0.75rem 2rem',
@@ -119,14 +126,6 @@ export default function Home() {
             textDecoration: 'none',
             letterSpacing: '0.02em',
             transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'rgba(165,180,252,0.12)';
-            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(165,180,252,0.5)';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'rgba(165,180,252,0.05)';
-            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(165,180,252,0.25)';
           }}
         >
           <span style={{ fontSize: '1rem' }}>&#9654;</span>
