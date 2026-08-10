@@ -1,10 +1,11 @@
+import { ethers } from 'ethers';
 import type { PQAccount } from './types';
 
-export async function createPQAccount(): Promise<PQAccount> {
+export async function createPQAccount(deterministicSeed?: string): Promise<PQAccount> {
   try {
     // Attempt real Kohaku import
     const kohaku = await import('@kohaku-eth/pq-account' as string);
-    const account = await kohaku.createPQAccount();
+    const account = await kohaku.createPQAccount(deterministicSeed); // Pass seed if supported
     return {
       publicKey: account.publicKey || account.address,
       keyType: 'dilithium',
@@ -13,14 +14,20 @@ export async function createPQAccount(): Promise<PQAccount> {
       accountAddress: account.address,
     };
   } catch {
-    return createMockPQAccount();
+    return createMockPQAccount(deterministicSeed);
   }
 }
 
-function createMockPQAccount(): PQAccount {
-  // Generate 64 random bytes as the mock Dilithium public key
+function createMockPQAccount(deterministicSeed?: string): PQAccount {
+  // Generate 64 bytes as the mock Dilithium public key
   const keyBytes = new Uint8Array(64);
-  if (typeof window !== 'undefined' && window.crypto) {
+  if (deterministicSeed) {
+    const hash = ethers.keccak256(ethers.toUtf8Bytes(deterministicSeed));
+    const hex = hash.replace('0x', '');
+    for(let i = 0; i < 64; i++) {
+        keyBytes[i] = parseInt(hex.substring((i % 32) * 2, (i % 32) * 2 + 2), 16);
+    }
+  } else if (typeof window !== 'undefined' && window.crypto) {
     window.crypto.getRandomValues(keyBytes);
   } else {
     // Node.js fallback

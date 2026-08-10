@@ -57,7 +57,14 @@ export default function StudentPortal() {
   const handleGenerateIdentity = async () => {
     setIsGeneratingIdentity(true);
     try {
-      const account = await createPQAccount();
+      if (!window.ethereum) throw new Error("MetaMask is required to login");
+      const provider = new ethers.BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
+      
+      const message = "Sign this message to securely login to your SecureHire Student Identity Vault.\n\nThis signature acts as your deterministic seed. Do not sign this on untrusted sites!";
+      const signature = await signer.signMessage(message);
+
+      const account = await createPQAccount(signature);
       const seed = deriveIdentitySeed(account.publicKey);
       const newIdentity = createIdentityFromSeed(seed);
       
@@ -67,9 +74,9 @@ export default function StudentPortal() {
       setIdentity(newIdentity);
       setPqKey(account.publicKey);
       fetchCredentials(newIdentity);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to generate quantum-safe identity.");
+      alert(err.message || "Failed to generate quantum-safe identity.");
     } finally {
       setIsGeneratingIdentity(false);
     }
@@ -169,10 +176,10 @@ export default function StudentPortal() {
               isLoading={isGeneratingIdentity}
               size="lg"
             >
-              Generate Post-Quantum Identity
+              Login with Wallet (Sign Message)
             </Button>
             <p className="text-sm text-slate-500 font-serif italic mt-4">
-              Generates a Dilithium keypair and derives a Semaphore v4 seed. Stored entirely locally.
+              Sign a deterministic message to generate your Dilithium keypair and derive a Semaphore v4 seed. You will recover the exact same identity every time.
             </p>
           </div>
         ) : (

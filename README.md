@@ -114,22 +114,12 @@ After deployment, copy the addresses from `packages/contracts/deployments/sepoli
 
 ## Deployed Contracts (Sepolia)
 
-*Fill in after deployment:*
-
 | Contract | Address |
 |---|---|
 | Semaphore v4 (pre-deployed) | `0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D` |
-| CourseRegistry | TBD |
-| CredentialIssuer | TBD |
-| CredentialVerifier | TBD |
-
----
-
-## Prize Tracks
-
-- 🏆 **Best Use of Semaphore** — entire credential flow (issuance → ZK proof → on-chain verification) runs on Semaphore v4
-- 🏆 **Best Use of Kohaku** — Post-Quantum ERC-4337 architecture designed throughout; see Kohaku Integration section below
-- 🏆 **Privacy Innovation** — selective disclosure of academic credentials with nullifier replay protection
+| CourseRegistry | `0x98A9DC53Ba5c29f4A4812C1c171EC7B4A1845C38` |
+| CredentialIssuer | `0x73A9D21e2783d820475f70c147E88cd71Ea4519A` |
+| CredentialVerifier | `0x379053222449A8704f10916821fFCf3122D63aF1` |
 
 ---
 

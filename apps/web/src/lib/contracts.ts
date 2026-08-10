@@ -4,9 +4,9 @@ export const RPC_URL = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ether
 // Contract addresses - updated after deployment
 export const CONTRACTS = {
   semaphore: '0x8A1fd199516489B0Fb7153EB5f075cDAC83c693D' as `0x${string}`,
-  courseRegistry: (process.env.NEXT_PUBLIC_COURSE_REGISTRY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-  credentialIssuer: (process.env.NEXT_PUBLIC_CREDENTIAL_ISSUER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
-  credentialVerifier: (process.env.NEXT_PUBLIC_CREDENTIAL_VERIFIER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  courseRegistry: (process.env.NEXT_PUBLIC_COURSE_REGISTRY_ADDRESS || '0x98A9DC53Ba5c29f4A4812C1c171EC7B4A1845C38') as `0x${string}`,
+  credentialIssuer: (process.env.NEXT_PUBLIC_CREDENTIAL_ISSUER_ADDRESS || '0x73A9D21e2783d820475f70c147E88cd71Ea4519A') as `0x${string}`,
+  credentialVerifier: (process.env.NEXT_PUBLIC_CREDENTIAL_VERIFIER_ADDRESS || '0x379053222449A8704f10916821fFCf3122D63aF1') as `0x${string}`,
 } as const;
 
 import { ethers } from 'ethers';
