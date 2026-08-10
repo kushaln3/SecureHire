@@ -10,7 +10,7 @@
     "deploy:sepolia": "pnpm --filter contracts deploy:sepolia"
   },
   "engines": {
-    "node": "22.x",
+    "node": ">=22.0.0",
     "pnpm": ">=8.0.0"
   },
   "dependencies": {
