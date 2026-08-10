@@ -51,7 +51,7 @@ export default function Home() {
             border-color: rgba(165,180,252,0.5) !important;
           }
         `}</style>
-        <div style={{ paddingTop: '1.5rem' }}>
+        <div style={{ paddingTop: '1.5rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
           <a
             href="/presentation.html"
             target="_blank"
@@ -73,10 +73,32 @@ export default function Home() {
             <span style={{ fontSize: '1rem' }}>&#9654;</span>
             Project Presentation
           </a>
-          <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#334155', letterSpacing: '0.05em' }}>
-            IITG.eth Hackathon 2026 — Slide Deck
-          </p>
+
+          <a
+            href="#"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="presentation-link"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.625rem',
+              padding: '0.75rem 2rem',
+              border: '1px solid rgba(165,180,252,0.25)',
+              backgroundColor: 'rgba(165,180,252,0.05)',
+              color: '#a5b4fc',
+              fontSize: '0.9375rem',
+              fontWeight: 500,
+              textDecoration: 'none',
+              letterSpacing: '0.02em',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span style={{ fontSize: '1rem' }}>&#128249;</span>
+            Video Demo
+          </a>
         </div>
+        <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#334155', letterSpacing: '0.05em' }}>
+          IITG.eth Hackathon 2026 — Slide Deck & Demo
+        </p>
       </section>
 
       {/* Portals */}
@@ -134,6 +156,7 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
     </div>
   );
 }
