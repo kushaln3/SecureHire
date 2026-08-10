@@ -102,6 +102,41 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Presentation Link */}
+      <section style={{ textAlign: 'center', paddingBottom: '3rem' }}>
+        <a
+          href="/presentation.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '0.625rem',
+            padding: '0.75rem 2rem',
+            border: '1px solid rgba(165,180,252,0.25)',
+            backgroundColor: 'rgba(165,180,252,0.05)',
+            color: '#a5b4fc',
+            fontSize: '0.9375rem',
+            fontWeight: 500,
+            textDecoration: 'none',
+            letterSpacing: '0.02em',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'rgba(165,180,252,0.12)';
+            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(165,180,252,0.5)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'rgba(165,180,252,0.05)';
+            (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(165,180,252,0.25)';
+          }}
+        >
+          <span style={{ fontSize: '1rem' }}>&#9654;</span>
+          Project Presentation
+        </a>
+        <p style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#334155', letterSpacing: '0.05em' }}>
+          IITG.eth Hackathon 2026 — Slide Deck
+        </p>
+      </section>
+
     </div>
   );
 }

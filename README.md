@@ -7,6 +7,7 @@
 [![Network](https://img.shields.io/badge/network-sepolia-purple.svg)](https://sepolia.etherscan.io)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 [![Live Demo](https://img.shields.io/badge/live%20demo-vercel-black.svg)](https://secure-hire-web.vercel.app)
+[![Presentation](https://img.shields.io/badge/slides-presentation-blueviolet.svg)](https://secure-hire-web.vercel.app/presentation.html)
 
 > IITG.eth Hackathon 2026 — Building Private Apps using Ethereum
 > IIT Guwahati | August 9-10, 2026
@@ -337,6 +338,8 @@ Identity was generated randomly on each login. Clearing the browser cache produc
 **Live app:** https://secure-hire-web.vercel.app
 
 **GitHub:** https://github.com/kushaln3/SecureHire
+
+**Presentation:** https://secure-hire-web.vercel.app/presentation.html
 
 ---
 
