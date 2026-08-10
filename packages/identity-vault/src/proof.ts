@@ -3,6 +3,8 @@ import { Group } from '@semaphore-protocol/group';
 import type { Identity } from '@semaphore-protocol/identity';
 import type { CredentialProof } from './types';
 
+import { ethers } from 'ethers';
+
 export async function generateCredentialProof(
   identity: Identity,
   groupId: number,
@@ -12,9 +14,12 @@ export async function generateCredentialProof(
   const group = new Group();
   group.addMembers(groupMembers);
 
-  // The scope is a BigInt derived from the jobPostingId
-  // This prevents the same proof from being replayed for a different job
-  const scope = BigInt('0x' + Buffer.from(jobPostingId).toString('hex').slice(0, 16));
+  // The scope is a BigInt derived from the jobPostingId AND the groupId
+  // This prevents the same proof from being replayed for a different job, 
+  // while ensuring nullifiers are unique per group within the same bundle.
+  const scopeString = `${groupId}-${jobPostingId}`;
+  const scopeHash = ethers.id(scopeString);
+  const scope = BigInt('0x' + scopeHash.slice(2, 18));
   
   // The message is a fixed signal for credential verification
   const message = BigInt(1); // "1" = credential verified

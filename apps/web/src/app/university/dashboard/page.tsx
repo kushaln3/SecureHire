@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { CONTRACTS, CREDENTIAL_ISSUER_ABI, COURSE_REGISTRY_ABI } from '@/lib/contracts';
 import { Button } from '@/components/ui/button';
-import { generateCredentialProof } from '@eternity-id/identity-vault'; 
 
 interface Course {
   groupId: number;
@@ -20,9 +19,10 @@ export default function UniversityDashboard() {
   const [creating, setCreating] = useState(false);
   const [createMode, setCreateMode] = useState<'course' | 'degree'>('course');
   
-  const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [selectedGroups, setSelectedGroups] = useState<number[]>([]);
   const [studentCommitment, setStudentCommitment] = useState("");
   const [issuing, setIssuing] = useState(false);
+  const [issueProgress, setIssueProgress] = useState("");
   
   const [linkDegreeGroupId, setLinkDegreeGroupId] = useState<number | null>(null);
   const [linkCourseGroupId, setLinkCourseGroupId] = useState<number | null>(null);
@@ -136,7 +136,7 @@ export default function UniversityDashboard() {
 
   const handleIssueCredential = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedGroup || !studentCommitment) return alert("Select course and enter commitment");
+    if (selectedGroups.length === 0 || !studentCommitment) return alert("Select at least one course/degree and enter commitment");
     if (!window.ethereum) return;
     setIssuing(true);
     
@@ -145,17 +145,43 @@ export default function UniversityDashboard() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACTS.credentialIssuer, CREDENTIAL_ISSUER_ABI, signer);
       
-      const tx = await contract.issueCredential(selectedGroup, studentCommitment);
-      await tx.wait();
+      let successCount = 0;
+      let skippedCount = 0;
+      
+      for (let i = 0; i < selectedGroups.length; i++) {
+        setIssueProgress(`Issuing ${i + 1}/${selectedGroups.length}... (Please confirm transaction)`);
+        try {
+          const tx = await contract.issueCredential(selectedGroups[i], studentCommitment);
+          await tx.wait();
+          successCount++;
+        } catch (err: any) {
+          // 0x258a195a is LeafAlreadyExists() from LeanIMT (Semaphore), meaning student is already enrolled
+          if (err.message?.includes('0x258a195a') || err.data === '0x258a195a' || err.info?.error?.data === '0x258a195a') {
+            const courseName = courses.find(c => c.groupId === selectedGroups[i])?.name || "this course";
+            alert(`Skipped: Student is already enrolled in ${courseName}.`);
+            skippedCount++;
+          } else {
+            throw err; // Re-throw actual errors to be caught by the outer block
+          }
+        }
+      }
       
       setStudentCommitment("");
-      alert("Credential successfully issued to student!");
+      setSelectedGroups([]);
+      alert(`Finished! Successfully issued ${successCount} credential(s).${skippedCount > 0 ? ` Skipped ${skippedCount} existing.` : ''}`);
       await fetchCourses(provider, signer.address);
     } catch (err: any) {
       alert(err.reason || err.message || "Failed to issue credential");
     } finally {
       setIssuing(false);
+      setIssueProgress("");
     }
+  };
+
+  const toggleSelectGroup = (gid: number) => {
+    setSelectedGroups(prev => 
+      prev.includes(gid) ? prev.filter(g => g !== gid) : [...prev, gid]
+    );
   };
 
   const handleLinkCourse = async (e: React.FormEvent) => {
@@ -308,23 +334,38 @@ export default function UniversityDashboard() {
 
         {/* Issue Credential Panel */}
         <div className="p-8 border border-slate-800 bg-slate-900/50">
-          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Issue Credential</h2>
+          <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Issue Credential(s)</h2>
           <form onSubmit={handleIssueCredential} className="space-y-6">
             <div>
-              <label className="block text-sm font-serif text-slate-400 mb-2">Select Course / Degree</label>
-              <select
-                required
-                value={selectedGroup || ""}
-                onChange={e => setSelectedGroup(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 px-4 py-3 text-slate-100 focus:outline-none focus:border-slate-500"
-              >
-                <option value="" disabled>-- Select --</option>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-serif text-slate-400">Select Courses / Degrees</label>
+                <button 
+                  type="button"
+                  className="text-xs text-blue-400 hover:text-blue-300"
+                  onClick={() => {
+                    if (selectedGroups.length === courses.length) setSelectedGroups([]);
+                    else setSelectedGroups(courses.map(c => c.groupId));
+                  }}
+                >
+                  {selectedGroups.length === courses.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-slate-950 p-4 border border-slate-800">
+                {courses.length === 0 && <div className="text-xs text-slate-500 italic">No courses available</div>}
                 {courses.map(c => (
-                  <option key={c.groupId} value={c.groupId}>
-                    {c.isDegree ? '🎓 ' : ''}{c.code}: {c.name}
-                  </option>
+                  <label key={c.groupId} className="flex items-center gap-3 p-2 hover:bg-slate-900 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={selectedGroups.includes(c.groupId)}
+                      onChange={() => toggleSelectGroup(c.groupId)}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
+                    />
+                    <span className="text-slate-200 text-sm">
+                      {c.isDegree ? '🎓 ' : ''}{c.code}: {c.name}
+                    </span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-serif text-slate-400 mb-2">Student Identity Commitment</label>
@@ -336,7 +377,7 @@ export default function UniversityDashboard() {
               />
             </div>
             <Button type="submit" className="w-full" isLoading={issuing}>
-              Issue to Student
+              {issuing ? (issueProgress || 'Issuing...') : `Issue ${selectedGroups.length > 0 ? selectedGroups.length : ''} Credential(s) to Student`}
             </Button>
           </form>
         </div>

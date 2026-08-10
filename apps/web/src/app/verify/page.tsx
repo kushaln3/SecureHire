@@ -1,20 +1,15 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ethers } from 'ethers';
-import { CONTRACTS, CREDENTIAL_VERIFIER_ABI, RPC_URL } from '@/lib/contracts';
+import { CONTRACTS, CREDENTIAL_VERIFIER_ABI } from '@/lib/contracts';
 import { Button } from '@/components/ui/button';
 import { encodeProofForContract } from '@eternity-id/identity-vault';
 import { useUniversities } from '@/lib/hooks/useUniversities';
 
-interface Course {
-  groupId: number;
-  name: string;
-  code: string;
-}
 
 export default function VerifyPortal() {
   const [selectedUniAddr, setSelectedUniAddr] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
+  const [expectedGroupIds, setExpectedGroupIds] = useState<number[]>([]);
   const [proofJson, setProofJson] = useState('');
 
   const [isVerifying, setIsVerifying] = useState(false);
@@ -22,9 +17,7 @@ export default function VerifyPortal() {
   const [errorMsg, setErrorMsg] = useState('');
   
   // State for bundle results
-  const [isBundle, setIsBundle] = useState(false);
-  const [bundleResults, setBundleResults] = useState<{groupId: number, courseName: string, valid: boolean}[]>([]);
-  const [verifiedNullifier, setVerifiedNullifier] = useState(''); // For single proof
+  const [bundleResults, setBundleResults] = useState<{groupId: number, courseName: string, valid: boolean, missing?: boolean}[]>([]);
 
   const { universities } = useUniversities();
   const selectedUniCourses = universities.find(u => u.address === selectedUniAddr)?.courses ?? [];
@@ -39,7 +32,6 @@ export default function VerifyPortal() {
     setResult(null);
     setErrorMsg("");
     setBundleResults([]);
-    setIsBundle(false);
     
     try {
       const parsedProof = JSON.parse(proofJson);
@@ -52,59 +44,60 @@ export default function VerifyPortal() {
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACTS.credentialVerifier, CREDENTIAL_VERIFIER_ABI, signer);
 
-      if (parsedProof.version === 'bundle-v1' && Array.isArray(parsedProof.proofs)) {
-        // Bundle Verification Flow
-        setIsBundle(true);
-        const groupIds = parsedProof.proofs.map((p: any) => Number(p.groupId));
-        const formattedProofs = parsedProof.proofs.map((p: any) => encodeProofForContract(p));
-        
-        const tx = await contract.verifyBatch(formattedProofs, groupIds);
-        
-        // Listen for the receipt or wait for tx
-        // Unfortunately verifyBatch returns bool[] which we cannot easily read from a transaction. 
-        // We can wait for it to pass (if it doesn't revert, we assume all valid for now, or we can use callStatic / staticCall to get results before sending tx)
-        
-        // First staticCall to get return values
-        let boolResults: boolean[];
-        try {
-          // Ethers v6: contract.verifyBatch.staticCall(...)
-          boolResults = await contract.verifyBatch.staticCall(formattedProofs, groupIds);
-        } catch (staticErr) {
-          console.error("Static call failed:", staticErr);
-          throw new Error("One or more proofs in the bundle are invalid or already used.");
-        }
-        
-        // Then actually send transaction to consume nullifiers
-        const txResponse = await contract.verifyBatch(formattedProofs, groupIds);
-        await txResponse.wait();
-        
-        const results = parsedProof.proofs.map((p: any, i: number) => ({
-          groupId: p.groupId,
-          courseName: p.courseName || `Course ${p.groupId}`,
-          valid: boolResults[i]
-        }));
-        
-        setBundleResults(results);
-        setResult('success');
-        
-      } else {
-        // Single Proof Flow
-        if (!selectedGroup) throw new Error("Please select a required course for single proof");
-        
-        if (Number(parsedProof.groupId) !== selectedGroup && Number(parsedProof.scope) !== selectedGroup) {
-           // We'll relax this check and just verify against what the proof says or the selected group
-        }
+      let proofsToVerify = [];
 
-        const formattedProof = encodeProofForContract(parsedProof);
-        const targetGroup = parsedProof.groupId ? Number(parsedProof.groupId) : selectedGroup;
-        
-        const tx = await contract.verifyCredential(formattedProof, targetGroup);
-        await tx.wait();
-        
-        setVerifiedNullifier(parsedProof.nullifier);
-        setIsBundle(false);
-        setResult('success');
+      if (parsedProof.version === 'bundle-v1' && Array.isArray(parsedProof.proofs)) {
+        if (expectedGroupIds.length > 0) {
+          proofsToVerify = parsedProof.proofs.filter((p: any) => expectedGroupIds.includes(Number(p.groupId || p.scope)));
+        } else {
+          proofsToVerify = parsedProof.proofs;
+        }
+      } else {
+        const pGrpId = Number(parsedProof.groupId || parsedProof.scope);
+        if (expectedGroupIds.length > 0 && !expectedGroupIds.includes(pGrpId)) {
+          throw new Error(`Proof provided is for Group ${pGrpId}, which is not in your required list.`);
+        }
+        proofsToVerify = [parsedProof];
       }
+
+      if (proofsToVerify.length === 0) {
+        throw new Error("No proofs found in the provided JSON that match your required credentials.");
+      }
+
+      const groupIds = proofsToVerify.map((p: any) => Number(p.groupId || p.scope));
+      const formattedProofs = proofsToVerify.map((p: any) => encodeProofForContract(p));
+      
+      let boolResults: boolean[];
+      try {
+        boolResults = await contract.verifyBatch.staticCall(formattedProofs, groupIds);
+      } catch (staticErr) {
+        console.error("Static call failed:", staticErr);
+        throw new Error("One or more proofs are cryptographically invalid or already used.");
+      }
+      
+      const txResponse = await contract.verifyBatch(formattedProofs, groupIds);
+      await txResponse.wait();
+      
+      const results: {groupId: number, courseName: string, valid: boolean, missing?: boolean}[] = proofsToVerify.map((p: any, i: number) => ({
+        groupId: Number(p.groupId || p.scope),
+        courseName: p.courseName || `Group ${p.groupId || p.scope}`,
+        valid: boolResults[i]
+      }));
+
+      // Check for missing proofs if expectedGroupIds was specified
+      const missingIds = expectedGroupIds.filter(id => !results.some(r => r.groupId === id));
+      missingIds.forEach(id => {
+         const course = selectedUniCourses.find(c => c.groupId === id);
+         results.push({
+            groupId: id,
+            courseName: course ? course.name : `Group ${id}`,
+            valid: false,
+            missing: true
+         });
+      });
+      
+      setBundleResults(results);
+      setResult('success');
       
       setProofJson("");
       
@@ -133,6 +126,12 @@ export default function VerifyPortal() {
     }
   };
 
+  const toggleExpectedGroup = (gid: number) => {
+    setExpectedGroupIds(prev => 
+      prev.includes(gid) ? prev.filter(g => g !== gid) : [...prev, gid]
+    );
+  };
+
   const detectedBundle = proofJson.length > 0 && isJsonBundle();
 
   return (
@@ -150,20 +149,13 @@ export default function VerifyPortal() {
           <h2 className="text-2xl font-serif font-bold text-slate-200 mb-6">Verify Cryptographic Proof</h2>
           <form className="space-y-6" onSubmit={handleVerify}>
             
-            {!detectedBundle && (
-              <>
-                <div className="mb-4 text-sm text-yellow-400 bg-yellow-900/20 p-3 border border-yellow-900/50 font-serif italic">
-                  Paste a bundle JSON to auto-detect and verify multiple credentials at once.
-                </div>
-                
                 {/* University */}
                 <div>
                   <label className="block text-sm font-serif font-medium text-slate-300 mb-2">1. Issuing Institution</label>
                   <select
                     style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: '#f1f5f9', outline: 'none' }}
                     value={selectedUniAddr}
-                    onChange={e => { setSelectedUniAddr(e.target.value); setSelectedGroup(null); }}
-                    required={!detectedBundle}
+                    onChange={e => { setSelectedUniAddr(e.target.value); }}
                   >
                     <option value="" disabled>-- Select Institution --</option>
                     {universities.map(u => (
@@ -172,33 +164,38 @@ export default function VerifyPortal() {
                   </select>
                 </div>
 
-                {/* Course */}
+                {/* Course Selection */}
                 <div>
-                  <label className="block text-sm font-serif font-medium text-slate-300 mb-2">2. Required Credential</label>
-                  <select
-                    style={{ width: '100%', backgroundColor: '#0a0c10', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', color: selectedUniAddr ? '#f1f5f9' : '#334155', outline: 'none' }}
-                    value={selectedGroup ?? ''}
-                    onChange={e => setSelectedGroup(Number(e.target.value))}
-                    disabled={!selectedUniAddr || selectedUniCourses.length === 0}
-                    required={!detectedBundle}
-                  >
-                    <option value="" disabled>
-                      {!selectedUniAddr ? '← Select institution first' : selectedUniCourses.length === 0 ? 'No courses' : '-- Select Course/Degree --'}
-                    </option>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-serif font-medium text-slate-300">2. Required Credentials (Optional)</label>
+                    <button 
+                      type="button"
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                      onClick={() => {
+                        if (expectedGroupIds.length === selectedUniCourses.length) setExpectedGroupIds([]);
+                        else setExpectedGroupIds(selectedUniCourses.map(c => c.groupId));
+                      }}
+                    >
+                      {expectedGroupIds.length === selectedUniCourses.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2 bg-slate-950 p-4 border border-slate-800">
+                    {selectedUniCourses.length === 0 && <div className="text-xs text-slate-500 italic">{!selectedUniAddr ? '← Select institution first to set requirements' : 'No courses available'}</div>}
                     {selectedUniCourses.map(c => (
-                      <option key={c.groupId} value={c.groupId}>{c.isDegree ? '🎓 ' : ''}{c.code}: {c.name}</option>
+                      <label key={c.groupId} className="flex items-center gap-3 p-2 hover:bg-slate-900 cursor-pointer">
+                        <input 
+                          type="checkbox"
+                          checked={expectedGroupIds.includes(c.groupId)}
+                          onChange={() => toggleExpectedGroup(c.groupId)}
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-900"
+                        />
+                        <span className="text-slate-200 text-sm">
+                          {c.isDegree ? 'Degree: ' : 'Course: '}{c.code}: {c.name}
+                        </span>
+                      </label>
                     ))}
-                  </select>
+                  </div>
                 </div>
-              </>
-            )}
-
-            {detectedBundle && (
-              <div className="bg-emerald-900/20 border border-emerald-900 p-4 rounded-sm">
-                <h3 className="text-emerald-400 font-bold mb-1">📦 Proof Bundle Detected</h3>
-                <p className="text-emerald-500/80 text-sm font-serif italic">Requirements will be automatically extracted from the bundle.</p>
-              </div>
-            )}
             
             <div>
               <label className="block text-sm font-serif font-medium text-slate-300 mb-2">Paste Proof JSON (From Applicant)</label>
@@ -224,101 +221,61 @@ export default function VerifyPortal() {
         <div>
           {result === 'success' && (
             <div className="p-8 border border-slate-700 bg-slate-800/40 animate-in zoom-in duration-500">
-              <div className="flex items-center gap-4 mb-8 border-b border-slate-700 pb-6">
-                <div className="w-16 h-16 bg-slate-100 flex items-center justify-center text-slate-900 text-3xl font-serif">
-                  ✓
-                </div>
-                <div>
-                  <h3 className="text-2xl font-serif font-bold text-slate-100">
-                    {isBundle ? "Bundle Validated" : "Proof Validated"}
-                  </h3>
-                  <p className="text-slate-400 font-serif italic text-sm">
-                    {isBundle ? "All Zero-Knowledge Proofs Passed" : "Zero-Knowledge Verification Passed"}
-                  </p>
-                </div>
+              <div className="mb-6 border-b border-slate-700 pb-4">
+                <h3 className="text-xl font-serif font-bold text-slate-100">
+                  Verification Results
+                </h3>
               </div>
               
-              {isBundle && bundleResults.length > 0 && (
-                <div className="mb-8">
-                  <h4 className="text-xs font-bold text-slate-300 tracking-wider font-mono mb-4">
-                    ✓ {bundleResults.filter(r => r.valid).length}/{bundleResults.length} Requirements Verified
-                  </h4>
-                  <div className="space-y-2">
-                    {bundleResults.map((r, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-slate-900/50 p-3 border border-slate-800">
-                        <div className="flex items-center gap-3">
-                          {r.valid ? (
-                            <span className="text-emerald-400">✓</span>
-                          ) : (
-                            <span className="text-red-400">✕</span>
-                          )}
-                          <span className="text-sm text-slate-200 font-serif">{r.courseName}</span>
-                        </div>
-                        <span className="text-xs font-mono text-slate-500">Grp #{r.groupId}</span>
-                      </div>
-                    ))}
-                  </div>
+              <div className="mb-8">
+                <div className="text-sm text-slate-300 font-mono mb-4">
+                  REQUIREMENTS STATUS:
                 </div>
-              )}
+                <ul className="space-y-2 list-disc list-inside">
+                  {bundleResults.map((r, idx) => (
+                    <li key={idx} className="text-sm font-serif">
+                      <span className="font-semibold text-slate-200">{r.courseName}</span>
+                      {' - '}
+                      {r.missing ? (
+                        <span className="text-red-400">Proof Not Provided</span>
+                      ) : r.valid ? (
+                        <span className="text-emerald-400">Successfully Verified</span>
+                      ) : (
+                        <span className="text-red-400">Verification Failed</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-slate-300 tracking-wider font-mono">WHAT YOU KNOW</h4>
-                  <ul className="space-y-3">
-                    <li className="flex gap-2 text-sm text-slate-200 font-serif">
-                      <span className="text-slate-100 font-sans">✓</span> Passed Requirement{isBundle ? 's' : ''}
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-200 font-serif">
-                      <span className="text-slate-100 font-sans">✓</span> Authentic Issuer{isBundle ? 's' : ''}
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-200 font-serif">
-                      <span className="text-slate-100 font-sans">✓</span> Groth16 ZK Valid
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-200 font-serif">
-                      <span className="text-slate-100 font-sans">✓</span> Replay Protected
-                    </li>
+              <div className="grid grid-cols-2 gap-8 mt-8 border-t border-slate-700 pt-6">
+                <div>
+                  <div className="text-xs font-bold text-slate-300 tracking-wider font-mono mb-3">WHAT IS PROVEN</div>
+                  <ul className="space-y-2 list-disc list-inside text-sm text-slate-200 font-serif">
+                    <li>Required credentials exist</li>
+                    <li>Cryptographically signed by issuer</li>
+                    <li>Zero-knowledge proof is valid</li>
+                    <li>Replay attack prevented</li>
                   </ul>
                 </div>
                 
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-slate-500 tracking-wider font-mono">WHAT REMAINS PRIVATE</h4>
-                  <ul className="space-y-3">
-                    <li className="flex gap-2 text-sm text-slate-400 font-serif">
-                      <span className="text-slate-600 font-sans">🔒</span> Applicant Identity
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-400 font-serif">
-                      <span className="text-slate-600 font-sans">🔒</span> Wallet Address
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-400 font-serif">
-                      <span className="text-slate-600 font-sans">🔒</span> Full Transcript
-                    </li>
-                    <li className="flex gap-2 text-sm text-slate-400 font-serif">
-                      <span className="text-slate-600 font-sans">🔒</span> Other Credentials
-                    </li>
+                <div>
+                  <div className="text-xs font-bold text-slate-500 tracking-wider font-mono mb-3">WHAT REMAINS PRIVATE</div>
+                  <ul className="space-y-2 list-disc list-inside text-sm text-slate-400 font-serif">
+                    <li>Applicant Identity</li>
+                    <li>Wallet Address</li>
+                    <li>Full Transcript</li>
+                    <li>Other Credentials</li>
                   </ul>
                 </div>
               </div>
-
-              {!isBundle && verifiedNullifier && (
-                <div className="mt-12 pt-6 border-t border-slate-700">
-                  <div className="text-xs text-slate-500 font-mono break-all">
-                    Nullifier Hash:<br/> {verifiedNullifier}
-                  </div>
-                  <div className="text-xs text-slate-400 font-serif italic mt-4">
-                    Verified at: {new Date().toLocaleTimeString()} via Sepolia
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
           {result === 'error' && (
             <div className="p-8 border border-red-900/50 bg-red-950/20 text-center animate-in zoom-in duration-500">
-              <div className="w-16 h-16 mx-auto bg-red-900/50 border border-red-500/30 flex items-center justify-center text-red-400 text-3xl font-serif mb-6">
-                ✕
-              </div>
-              <h3 className="text-2xl font-serif font-bold text-red-400 mb-4">Invalid or Reused Proof</h3>
-              <p className="text-red-400/80 font-serif italic text-sm mb-4">
+              <h3 className="text-xl font-serif font-bold text-red-400 mb-4">Verification Error</h3>
+              <p className="text-red-400/80 font-serif text-sm mb-4">
                 The zero-knowledge proof could not be cryptographically verified, or the nullifier has already been consumed (replay attack).
               </p>
               <div className="text-xs text-red-300 font-mono bg-red-950 border border-red-900 p-4 rounded-none text-left break-all">
